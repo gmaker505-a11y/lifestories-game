@@ -220,7 +220,8 @@ func _build_resources() -> void:
 		bush_mat.roughness = 1.0
 		bush.material_override = bush_mat
 		food_root.add_child(bush)
-		food_sources.append({"position": Vector3(x, y, z), "food": rng.randi_range(4, 9), "node": bush})
+		var capacity := rng.randi_range(5, 9)
+		food_sources.append({"position": Vector3(x, y, z), "food": capacity, "capacity": capacity, "node": bush})
 
 func _build_founders() -> void:
 	var people_root := Node3D.new()
@@ -271,6 +272,16 @@ func _build_founders() -> void:
 
 func _advance_day() -> void:
 	elapsed_days += 1
+	# Plants recover slowly through natural growth. This is plant regrowth, not
+	# artificial animal or human respawning.
+	if elapsed_days % 12 == 0:
+		for food_index in range(food_sources.size()):
+			var plant: Dictionary = food_sources[food_index]
+			if int(plant["food"]) < int(plant["capacity"]):
+				plant["food"] = int(plant["food"]) + 1
+				if is_instance_valid(plant["node"]):
+					plant["node"].visible = true
+				food_sources[food_index] = plant
 	for i in range(people.size()):
 		var person: Dictionary = people[i]
 		if not person["alive"]:
@@ -289,6 +300,7 @@ func _advance_day() -> void:
 			person["alive"] = false
 			person["action"] = "Died from unmet survival needs"
 			founders[i].visible = false
+			people[i] = person
 			continue
 		_choose_action(i)
 		people[i] = person
