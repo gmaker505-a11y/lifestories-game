@@ -1,35 +1,76 @@
 extends Node3D
 
-# Prototype milestone: generated landscape, 100 founders, and time controls.
-# Needs, ecology, genealogy, and survival rules will be added as separate systems.
+# Living World — playable foundation.
+# This is a deliberately small, testable simulation slice, not the finished game.
+# Core rules: 100 original founders, Pure Observation, no unrelated human spawns,
+# no artificial wildlife respawns, and actions constrained by available resources.
+
 const FOUNDER_COUNT := 100
 const WORLD_SIZE := 180.0
+const GRID_SIZE := 65
+const FOOD_COUNT := 95
+const TREE_COUNT := 150
+const WATER_LEVEL := -1.35
+const DAY_SECONDS := 1.0
 
 var world_seed: int
-var elapsed_days := 0.0
+var rng := RandomNumberGenerator.new()
+var terrain_noise := FastNoiseLite.new()
+var elapsed_days := 0
+var day_accumulator := 0.0
 var time_speed := 1.0
 var paused := false
 var founders: Array[Node3D] = []
-var home_positions: Array[Vector3] = []
+var people: Array[Dictionary] = []
+var food_sources: Array[Dictionary] = []
+var water_sources: Array[Vector3] = []
+var selected_index := 0
+
 var status_label: Label
 var seed_label: Label
+var detail_label: Label
 var pause_button: Button
 var speed_button: Button
+var people_button: Button
+var world_material: StandardMaterial3D
+var camera: Camera3D
+var world_root: Node3D
 
 func _ready() -> void:
 	world_seed = int(Time.get_unix_time_from_system()) % 2147483647
-	seed(world_seed)
+	rng.seed = world_seed
+	terrain_noise.seed = world_seed
+	terrain_noise.frequency = 0.035
+	terrain_noise.fractal_octaves = 4
+	terrain_noise.fractal_gain = 0.48
+	terrain_noise.fractal_lacunarity = 2.0
+	world_root = Node3D.new()
+	world_root.name = "GeneratedWorld"
+	add_child(world_root)
 	_build_environment()
 	_build_landscape()
+	_build_water()
+	_build_resources()
 	_build_founders()
 	_build_interface()
 	_update_interface()
 
 func _process(delta: float) -> void:
 	if not paused:
-		elapsed_days += delta * time_speed
-		_simulate_founders(delta * time_speed)
+		var sim_delta := delta * time_speed
+		day_accumulator += sim_delta / DAY_SECONDS
+		while day_accumulator >= 1.0:
+			day_accumulator -= 1.0
+			_advance_day()
+		_move_people(sim_delta)
 	_update_interface()
+
+func _height_at(x: float, z: float) -> float:
+	var broad := terrain_noise.get_noise_2d(x, z) * 5.8
+	var detail := terrain_noise.get_noise_2d(x * 2.7 + 91.0, z * 2.7 - 43.0) * 1.15
+	# The broad valley near the middle creates a lowland that can hold water.
+	var basin := maxf(0.0, 1.0 - Vector2(x, z).length() / 75.0) * -1.7
+	return broad + detail + basin
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -37,139 +78,317 @@ func _build_environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = Sky.new()
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.62, 0.69, 0.78)
-	environment.ambient_light_energy = 0.75
+	environment.ambient_light_color = Color(0.62, 0.70, 0.80)
+	environment.ambient_light_energy = 0.8
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	world_environment.environment = environment
 	add_child(world_environment)
 
 	var sunlight := DirectionalLight3D.new()
 	sunlight.rotation_degrees = Vector3(-48.0, -25.0, 0.0)
-	sunlight.light_energy = 1.2
+	sunlight.light_energy = 1.15
+	sunlight.shadow_enabled = true
 	add_child(sunlight)
 
-	var camera := Camera3D.new()
-	camera.position = Vector3(0.0, 95.0, 115.0)
-	camera.rotation_degrees = Vector3(-38.0, 0.0, 0.0)
+	camera = Camera3D.new()
+	camera.position = Vector3(0.0, 82.0, 92.0)
+	camera.rotation_degrees = Vector3(-42.0, 0.0, 0.0)
 	camera.current = true
 	camera.fov = 52.0
 	add_child(camera)
 
 func _build_landscape() -> void:
-	var ground := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(WORLD_SIZE, WORLD_SIZE)
-	plane.subdivide_width = 40
-	plane.subdivide_depth = 40
-	ground.mesh = plane
-	var ground_material := StandardMaterial3D.new()
-	ground_material.albedo_color = Color(0.32, 0.49, 0.32)
-	ground_material.roughness = 1.0
-	ground.material_override = ground_material
-	ground.position.y = -0.2
-	add_child(ground)
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var step_size := WORLD_SIZE / float(GRID_SIZE - 1)
+	for z in range(GRID_SIZE - 1):
+		for x in range(GRID_SIZE - 1):
+			var x0 := -WORLD_SIZE * 0.5 + float(x) * step_size
+			var x1 := x0 + step_size
+			var z0 := -WORLD_SIZE * 0.5 + float(z) * step_size
+			var z1 := z0 + step_size
+			var a := Vector3(x0, _height_at(x0, z0), z0)
+			var b := Vector3(x1, _height_at(x1, z0), z0)
+			var c := Vector3(x0, _height_at(x0, z1), z1)
+			var d := Vector3(x1, _height_at(x1, z1), z1)
+			_add_terrain_vertex(surface, a)
+			_add_terrain_vertex(surface, c)
+			_add_terrain_vertex(surface, b)
+			_add_terrain_vertex(surface, b)
+			_add_terrain_vertex(surface, c)
+			_add_terrain_vertex(surface, d)
+	surface.generate_normals()
+	var terrain := MeshInstance3D.new()
+	terrain.name = "ProceduralTerrain"
+	terrain.mesh = surface.commit()
+	var terrain_material := StandardMaterial3D.new()
+	terrain_material.vertex_color_use_as_albedo = true
+	terrain_material.roughness = 1.0
+	terrain.material_override = terrain_material
+	world_root.add_child(terrain)
 
-	# Seed-driven natural-looking patches; this is a visual placeholder, not yet
-	# a full terrain, hydrology, geology, or climate simulation.
-	var patches := Node3D.new()
-	patches.name = "LandscapePatches"
-	add_child(patches)
-	for i in range(110):
-		var patch := MeshInstance3D.new()
-		var mesh := CylinderMesh.new()
-		var radius := randf_range(2.0, 8.0)
-		mesh.top_radius = radius
-		mesh.bottom_radius = radius * randf_range(0.8, 1.2)
-		mesh.height = 0.08
-		patch.mesh = mesh
-		var material := StandardMaterial3D.new()
-		var roll := randf()
-		if roll < 0.15:
-			material.albedo_color = Color(0.68, 0.62, 0.40)
-		elif roll < 0.28:
-			material.albedo_color = Color(0.24, 0.39, 0.27)
-		else:
-			material.albedo_color = Color(0.38, 0.56, 0.35)
-		material.roughness = 1.0
-		patch.material_override = material
-		patch.position = Vector3(
-			randf_range(-WORLD_SIZE * 0.48, WORLD_SIZE * 0.48),
-			-0.1,
-			randf_range(-WORLD_SIZE * 0.48, WORLD_SIZE * 0.48)
-		)
-		patches.add_child(patch)
+func _add_terrain_vertex(surface: SurfaceTool, point: Vector3) -> void:
+	surface.set_color(_terrain_color(point.y))
+	surface.add_vertex(point)
+
+func _terrain_color(height: float) -> Color:
+	if height < WATER_LEVEL + 0.8:
+		return Color(0.48, 0.48, 0.35)
+	if height < WATER_LEVEL + 1.8:
+		return Color(0.62, 0.59, 0.40)
+	if height > 5.0:
+		return Color(0.49, 0.51, 0.45)
+	if height > 2.7:
+		return Color(0.35, 0.43, 0.30)
+	return Color(0.31, 0.48, 0.30)
+
+func _build_water() -> void:
+	# A visible central lake is a starting water source, not a full hydrology model.
+	var lake := MeshInstance3D.new()
+	lake.name = "Lake"
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 17.0
+	mesh.bottom_radius = 17.0
+	mesh.height = 0.12
+	lake.mesh = mesh
+	lake.position = Vector3(-10.0, WATER_LEVEL, -7.0)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.12, 0.36, 0.48, 0.88)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.roughness = 0.22
+	material.metallic = 0.05
+	lake.material_override = material
+	world_root.add_child(lake)
+	water_sources.append(lake.position)
+
+func _build_resources() -> void:
+	var trees_root := Node3D.new()
+	trees_root.name = "Vegetation"
+	world_root.add_child(trees_root)
+	for i in range(TREE_COUNT):
+		var x := rng.randf_range(-WORLD_SIZE * 0.46, WORLD_SIZE * 0.46)
+		var z := rng.randf_range(-WORLD_SIZE * 0.46, WORLD_SIZE * 0.46)
+		if Vector2(x + 10.0, z + 7.0).length() < 21.0:
+			continue
+		var y := _height_at(x, z)
+		if y < WATER_LEVEL + 0.25:
+			continue
+		var tree := Node3D.new()
+		tree.position = Vector3(x, y, z)
+		var trunk := MeshInstance3D.new()
+		var trunk_mesh := CylinderMesh.new()
+		trunk_mesh.top_radius = 0.16
+		trunk_mesh.bottom_radius = 0.25
+		trunk_mesh.height = rng.randf_range(1.4, 2.4)
+		trunk.mesh = trunk_mesh
+		trunk.position.y = trunk_mesh.height * 0.5
+		var trunk_mat := StandardMaterial3D.new()
+		trunk_mat.albedo_color = Color(0.30, 0.20, 0.12)
+		trunk.material_override = trunk_mat
+		tree.add_child(trunk)
+		var crown := MeshInstance3D.new()
+		var crown_mesh := SphereMesh.new()
+		var crown_scale := rng.randf_range(0.8, 1.45)
+		crown_mesh.radius = crown_scale
+		crown_mesh.height = crown_scale * 2.0
+		crown.mesh = crown_mesh
+		crown.position.y = trunk_mesh.height + crown_scale * 0.55
+		var crown_mat := StandardMaterial3D.new()
+		crown_mat.albedo_color = Color(0.13 + rng.randf() * 0.08, 0.30 + rng.randf() * 0.12, 0.15)
+		crown_mat.roughness = 1.0
+		crown.material_override = crown_mat
+		tree.add_child(crown)
+		trees_root.add_child(tree)
+
+	var food_root := Node3D.new()
+	food_root.name = "WildFood"
+	world_root.add_child(food_root)
+	for i in range(FOOD_COUNT):
+		var x := rng.randf_range(-WORLD_SIZE * 0.45, WORLD_SIZE * 0.45)
+		var z := rng.randf_range(-WORLD_SIZE * 0.45, WORLD_SIZE * 0.45)
+		var y := _height_at(x, z)
+		if y < WATER_LEVEL + 0.25 or Vector2(x + 10.0, z + 7.0).length() < 20.0:
+			continue
+		var bush := MeshInstance3D.new()
+		var bush_mesh := SphereMesh.new()
+		bush_mesh.radius = 0.65
+		bush_mesh.height = 1.1
+		bush.mesh = bush_mesh
+		bush.position = Vector3(x, y + 0.45, z)
+		var bush_mat := StandardMaterial3D.new()
+		bush_mat.albedo_color = Color(0.18, 0.39, 0.17)
+		bush_mat.roughness = 1.0
+		bush.material_override = bush_mat
+		food_root.add_child(bush)
+		food_sources.append({"position": Vector3(x, y, z), "food": rng.randi_range(4, 9), "node": bush})
 
 func _build_founders() -> void:
 	var people_root := Node3D.new()
 	people_root.name = "Founders"
-	add_child(people_root)
+	world_root.add_child(people_root)
 	for i in range(FOUNDER_COUNT):
 		var person := Node3D.new()
 		person.name = "Founder_%03d" % (i + 1)
-
 		var body := MeshInstance3D.new()
 		var capsule := CapsuleMesh.new()
-		capsule.radius = 0.42
-		capsule.height = 1.7
+		capsule.radius = 0.34
+		capsule.height = 1.55
 		body.mesh = capsule
 		var material := StandardMaterial3D.new()
-		material.albedo_color = Color.from_hsv(
-			randf_range(0.04, 0.12),
-			randf_range(0.25, 0.65),
-			randf_range(0.45, 0.85)
-		)
+		material.albedo_color = Color.from_hsv(rng.randf_range(0.04, 0.12), rng.randf_range(0.25, 0.62), rng.randf_range(0.48, 0.84))
 		material.roughness = 0.9
 		body.material_override = material
-		body.position.y = 0.85
+		body.position.y = 0.78
 		person.add_child(body)
-
-		var home := Vector3(
-			randf_range(-35.0, 35.0),
-			0.0,
-			randf_range(-35.0, 35.0)
-		)
+		var head := MeshInstance3D.new()
+		var head_mesh := SphereMesh.new()
+		head_mesh.radius = 0.25
+		head_mesh.height = 0.5
+		head.mesh = head_mesh
+		head.position.y = 1.62
+		head.material_override = material
+		person.add_child(head)
+		var home := Vector3(rng.randf_range(-27.0, 27.0), _height_at(0.0, 0.0), rng.randf_range(-27.0, 27.0))
+		home.y = _height_at(home.x, home.z)
 		person.position = home
 		people_root.add_child(person)
 		founders.append(person)
-		home_positions.append(home)
+		people.append({
+			"id": i + 1,
+			"name": "Founder %03d" % (i + 1),
+			"age": rng.randi_range(18, 42),
+			"hunger": rng.randf_range(15.0, 48.0),
+			"thirst": rng.randf_range(12.0, 40.0),
+			"energy": rng.randf_range(55.0, 100.0),
+			"health": 100.0,
+			"alive": true,
+			"action": "Exploring",
+			"target": home,
+			"home": home,
+			"food_eaten": 0,
+			"water_drunk": 0
+		})
 
-func _simulate_founders(delta: float) -> void:
-	# Early visual placeholder: small local movement only. These agents do not
-	# yet have survival needs, memory, relationships, or individual decision AI.
-	for i in range(founders.size()):
-		var home := home_positions[i]
-		var offset := Vector3(
-			sin(elapsed_days * 0.12 + i * 1.7),
-			0.0,
-			cos(elapsed_days * 0.10 + i * 2.1)
-		) * 2.0
-		founders[i].position = founders[i].position.lerp(
-			home + offset,
-			clampf(delta * 0.18, 0.0, 1.0)
-		)
+func _advance_day() -> void:
+	elapsed_days += 1
+	for i in range(people.size()):
+		var person: Dictionary = people[i]
+		if not person["alive"]:
+			continue
+		person["age"] = int(person["age"]) + (1 if elapsed_days % 365 == 0 else 0)
+		person["hunger"] = minf(100.0, float(person["hunger"]) + 5.0)
+		person["thirst"] = minf(100.0, float(person["thirst"]) + 7.0)
+		person["energy"] = minf(100.0, float(person["energy"]) + 2.0)
+		if float(person["hunger"]) > 82.0:
+			person["health"] = maxf(0.0, float(person["health"]) - 2.0)
+		if float(person["thirst"]) > 82.0:
+			person["health"] = maxf(0.0, float(person["health"]) - 4.0)
+		if float(person["energy"]) < 15.0:
+			person["health"] = maxf(0.0, float(person["health"]) - 1.0)
+		if float(person["health"]) <= 0.0:
+			person["alive"] = false
+			person["action"] = "Died from unmet survival needs"
+			founders[i].visible = false
+			continue
+		_choose_action(i)
+		people[i] = person
+
+func _choose_action(index: int) -> void:
+	var person: Dictionary = people[index]
+	if float(person["thirst"]) >= float(person["hunger"]) * 0.72:
+		var nearest_water := _nearest_water(founders[index].position)
+		person["target"] = nearest_water
+		person["action"] = "Seeking water"
+		if Vector2(founders[index].position.x - nearest_water.x, founders[index].position.z - nearest_water.z).length() < 3.0:
+			person["thirst"] = maxf(0.0, float(person["thirst"]) - 52.0)
+			person["water_drunk"] = int(person["water_drunk"]) + 1
+			person["action"] = "Drinking"
+	else:
+		var food_index := _nearest_food(founders[index].position)
+		if food_index >= 0:
+			var food: Dictionary = food_sources[food_index]
+			var food_position: Vector3 = food["position"]
+			person["target"] = food_position
+			person["action"] = "Gathering food"
+			if Vector2(founders[index].position.x - food_position.x, founders[index].position.z - food_position.z).length() < 2.5 and int(food["food"]) > 0:
+				food["food"] = int(food["food"]) - 1
+				person["hunger"] = maxf(0.0, float(person["hunger"]) - 42.0)
+				person["food_eaten"] = int(person["food_eaten"]) + 1
+				person["action"] = "Eating"
+				food_sources[food_index] = food
+				if int(food["food"]) <= 0 and is_instance_valid(food["node"]):
+					food["node"].visible = false
+					food_sources[food_index] = food
+		else:
+			person["target"] = person["home"]
+			person["action"] = "Searching for food"
+	people[index] = person
+
+func _nearest_water(from: Vector3) -> Vector3:
+	var nearest := water_sources[0]
+	var best_distance := from.distance_squared_to(nearest)
+	for point in water_sources:
+		var distance := from.distance_squared_to(point)
+		if distance < best_distance:
+			best_distance = distance
+			nearest = point
+	return nearest
+
+func _nearest_food(from: Vector3) -> int:
+	var best_index := -1
+	var best_distance := INF
+	for i in range(food_sources.size()):
+		var food: Dictionary = food_sources[i]
+		if int(food["food"]) <= 0:
+			continue
+		var point: Vector3 = food["position"]
+		var distance := from.distance_squared_to(point)
+		if distance < best_distance:
+			best_distance = distance
+			best_index = i
+	return best_index
+
+func _move_people(delta: float) -> void:
+	for i in range(people.size()):
+		var person: Dictionary = people[i]
+		if not person["alive"]:
+			continue
+		var agent := founders[i]
+		var target: Vector3 = person["target"]
+		var current := agent.position
+		var flat_target := Vector3(target.x, _height_at(target.x, target.z), target.z)
+		var direction := Vector3(flat_target.x - current.x, 0.0, flat_target.z - current.z)
+		if direction.length() > 1.3:
+			direction = direction.normalized()
+			var movement := minf(2.1 * delta, current.distance_to(flat_target))
+			agent.position.x += direction.x * movement
+			agent.position.z += direction.z * movement
+			agent.position.y = _height_at(agent.position.x, agent.position.z)
+			if direction.length() > 0.1:
+				agent.rotation.y = atan2(direction.x, direction.z)
 
 func _build_interface() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-
 	var panel := PanelContainer.new()
-	panel.position = Vector2(18, 18)
-	panel.custom_minimum_size = Vector2(320, 150)
+	panel.position = Vector2(16, 16)
+	panel.custom_minimum_size = Vector2(310, 210)
 	layer.add_child(panel)
-
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 7)
+	layout.add_theme_constant_override("separation", 6)
 	panel.add_child(layout)
-
 	var heading := Label.new()
 	heading.text = "LIVING WORLD"
-	heading.add_theme_font_size_override("font_size", 23)
+	heading.add_theme_font_size_override("font_size", 24)
 	layout.add_child(heading)
-
+	var motto := Label.new()
+	motto.text = "The people create the world."
+	motto.add_theme_font_size_override("font_size", 12)
+	layout.add_child(motto)
 	status_label = Label.new()
 	layout.add_child(status_label)
 	seed_label = Label.new()
 	layout.add_child(seed_label)
-
 	var controls := HBoxContainer.new()
 	layout.add_child(controls)
 	pause_button = Button.new()
@@ -180,11 +399,18 @@ func _build_interface() -> void:
 	speed_button.text = "Time x1"
 	speed_button.pressed.connect(_cycle_speed)
 	controls.add_child(speed_button)
-
-	var note := Label.new()
-	note.text = "Pure Observation  •  100 founders"
-	note.add_theme_font_size_override("font_size", 12)
-	layout.add_child(note)
+	people_button = Button.new()
+	people_button.text = "Inspect person"
+	people_button.pressed.connect(_cycle_person)
+	layout.add_child(people_button)
+	detail_label = Label.new()
+	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail_label.custom_minimum_size = Vector2(280, 100)
+	layout.add_child(detail_label)
+	var footer := Label.new()
+	footer.text = "PURE OBSERVATION  •  ORIGINAL FOUNDERS: 100"
+	footer.add_theme_font_size_override("font_size", 10)
+	layout.add_child(footer)
 
 func _toggle_pause() -> void:
 	paused = not paused
@@ -199,12 +425,31 @@ func _cycle_speed() -> void:
 		time_speed = 1.0
 	_update_interface()
 
+func _cycle_person() -> void:
+	for offset in range(1, people.size() + 1):
+		var candidate := (selected_index + offset) % people.size()
+		if bool(people[candidate]["alive"]):
+			selected_index = candidate
+			break
+	_update_interface()
+
 func _update_interface() -> void:
 	if status_label == null:
 		return
-	status_label.text = "Day %d  •  Founders: %d" % [int(elapsed_days), founders.size()]
+	var alive_count := 0
+	for person in people:
+		if bool(person["alive"]):
+			alive_count += 1
+	status_label.text = "Year %d  •  Day %d\nLiving people: %d / %d" % [int(elapsed_days / 365) + 1, elapsed_days % 365 + 1, alive_count, FOUNDER_COUNT]
 	seed_label.text = "World seed: %d" % world_seed
 	if pause_button != null:
 		pause_button.text = "Resume" if paused else "Pause"
 	if speed_button != null:
 		speed_button.text = "Time x%d" % int(time_speed)
+	if detail_label != null and people.size() > 0:
+		var person: Dictionary = people[selected_index]
+		var state := "Alive" if bool(person["alive"]) else "Dead"
+		detail_label.text = "PERSON: %s  •  %s\nAge: %d\nHealth: %d  |  Hunger: %d  |  Thirst: %d\nAction: %s\nFood gathered: %d  •  Water visits: %d" % [
+			person["name"], state, int(person["age"]), int(person["health"]), int(person["hunger"]), int(person["thirst"]),
+			person["action"], int(person["food_eaten"]), int(person["water_drunk"])
+		]
