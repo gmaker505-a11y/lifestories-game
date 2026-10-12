@@ -38,22 +38,37 @@ var world_root: Node3D
 
 func _ready() -> void:
 	world_seed = int(Time.get_unix_time_from_system()) % 2147483647
+	_configure_seed(world_seed)
+	_build_environment()
+	_build_world_content()
+	_build_interface()
+	_update_interface()
+
+func _configure_seed(seed_value: int) -> void:
+	world_seed = seed_value
 	rng.seed = world_seed
 	terrain_noise.seed = world_seed
 	terrain_noise.frequency = 0.035
 	terrain_noise.fractal_octaves = 4
 	terrain_noise.fractal_gain = 0.48
 	terrain_noise.fractal_lacunarity = 2.0
+
+func _build_world_content() -> void:
+	if is_instance_valid(world_root):
+		remove_child(world_root)
+		world_root.queue_free()
+	founders.clear()
+	people.clear()
+	food_sources.clear()
+	water_sources.clear()
+	selected_index = 0
 	world_root = Node3D.new()
 	world_root.name = "GeneratedWorld"
 	add_child(world_root)
-	_build_environment()
 	_build_landscape()
 	_build_water()
 	_build_resources()
 	_build_founders()
-	_build_interface()
-	_update_interface()
 
 func _process(delta: float) -> void:
 	if not paused:
@@ -415,6 +430,16 @@ func _build_interface() -> void:
 	people_button.text = "Inspect person"
 	people_button.pressed.connect(_cycle_person)
 	layout.add_child(people_button)
+	var save_controls := HBoxContainer.new()
+	layout.add_child(save_controls)
+	var save_button := Button.new()
+	save_button.text = "Save world"
+	save_button.pressed.connect(_save_world)
+	save_controls.add_child(save_button)
+	var load_button := Button.new()
+	load_button.text = "Load world"
+	load_button.pressed.connect(_load_world)
+	save_controls.add_child(load_button)
 	detail_label = Label.new()
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_label.custom_minimum_size = Vector2(280, 100)
@@ -423,6 +448,56 @@ func _build_interface() -> void:
 	footer.text = "PURE OBSERVATION  •  ORIGINAL FOUNDERS: 100"
 	footer.add_theme_font_size_override("font_size", 10)
 	layout.add_child(footer)
+
+func _save_world() -> void:
+	var save_data := ConfigFile.new()
+	save_data.set_value("world", "seed", world_seed)
+	save_data.set_value("world", "elapsed_days", elapsed_days)
+	save_data.set_value("world", "time_speed", time_speed)
+	save_data.set_value("world", "people", people)
+	var positions: Array[Vector3] = []
+	for agent in founders:
+		positions.append(agent.position)
+	save_data.set_value("world", "positions", positions)
+	var food_amounts: Array[int] = []
+	for source in food_sources:
+		food_amounts.append(int(source["food"]))
+	save_data.set_value("world", "food_amounts", food_amounts)
+	var result := save_data.save("user://living_world.save")
+	if result == OK:
+		status_label.text = "World saved successfully."
+	else:
+		status_label.text = "Save failed. Error code: %d" % result
+
+func _load_world() -> void:
+	var save_data := ConfigFile.new()
+	var result := save_data.load("user://living_world.save")
+	if result != OK:
+		status_label.text = "No valid save found yet."
+		return
+	var saved_seed := int(save_data.get_value("world", "seed", world_seed))
+	_configure_seed(saved_seed)
+	_build_world_content()
+	elapsed_days = int(save_data.get_value("world", "elapsed_days", 0))
+	time_speed = float(save_data.get_value("world", "time_speed", 1.0))
+	var saved_people: Array = save_data.get_value("world", "people", [])
+	var saved_positions: Array = save_data.get_value("world", "positions", [])
+	var saved_food: Array = save_data.get_value("world", "food_amounts", [])
+	for i in range(mini(people.size(), saved_people.size())):
+		var saved_person: Dictionary = saved_people[i]
+		people[i] = saved_person
+		if i < saved_positions.size():
+			founders[i].position = saved_positions[i]
+		founders[i].visible = bool(saved_person["alive"])
+	for i in range(mini(food_sources.size(), saved_food.size())):
+		var source: Dictionary = food_sources[i]
+		source["food"] = int(saved_food[i])
+		if is_instance_valid(source["node"]):
+			source["node"].visible = int(source["food"]) > 0
+		food_sources[i] = source
+	paused = true
+	_update_interface()
+	status_label.text = "World loaded. Simulation is paused."
 
 func _toggle_pause() -> void:
 	paused = not paused
