@@ -36,7 +36,9 @@ jobs:
           keytool -genkeypair -noprompt -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -storetype JKS
           SDKMANAGER=/usr/lib/android-sdk/cmdline-tools/cmdline-tools/bin/sdkmanager
           test -x "$SDKMANAGER"
+          set +o pipefail
           yes | "$SDKMANAGER" --sdk_root=/usr/lib/android-sdk "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          set -o pipefail
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=/usr/lib/android-sdk" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
