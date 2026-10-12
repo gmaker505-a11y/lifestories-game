@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+env:
+  GODOT_VERSION: "4.3"
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
@@ -14,37 +17,46 @@ jobs:
       - name: Check out project
         uses: actions/checkout@v4
 
-      - name: Configure Godot Android export environment
+      - name: Configure Godot templates and Android tools
+        shell: bash
         run: |
-          # The CI image keeps its preinstalled Godot templates and settings under /root.
-          mkdir -p "$HOME/.local/share/godot" "$HOME/.config"
-          if [ -d /root/.local/share/godot/export_templates ]; then
-            mkdir -p "$HOME/.local/share/godot"
-            cp -a /root/.local/share/godot/export_templates "$HOME/.local/share/godot/"
+          set -euxo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates" "$HOME/.config"
+          if [ -d /root/.local/share/godot/export_templates/4.3.stable ]; then
+            cp -a /root/.local/share/godot/export_templates/4.3.stable "$HOME/.local/share/godot/export_templates/"
           fi
-          if [ -d /root/.config/godot ]; then
-            mkdir -p "$HOME/.config"
-            cp -a /root/.config/godot "$HOME/.config/"
+          if [ -d /root/.config/godot ] && [ ! -d "$HOME/.config/godot" ]; then
+            cp -a /root/.config/godot "$HOME/.config/godot"
           fi
-          mkdir -p "$HOME/.config/godot"
+          mkdir -p "$HOME/.config/godot" "$HOME/.android"
           SETTINGS="$HOME/.config/godot/editor_settings-4.3.tres"
           touch "$SETTINGS"
-          if ! grep -q 'export/android/java_sdk_path' "$SETTINGS"; then
-            echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> "$SETTINGS"
-          fi
+          grep -q 'export/android/java_sdk_path' "$SETTINGS" || echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> "$SETTINGS"
+          grep -q 'export/android/android_sdk_path' "$SETTINGS" || echo 'export/android/android_sdk_path = "/usr/lib/android-sdk"' >> "$SETTINGS"
+          keytool -genkeypair -noprompt -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -storetype JKS
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=/usr/lib/android-sdk" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
           java -version
-          ls "$HOME/.local/share/godot/export_templates/4.3.stable"
+          test -f "$HOME/.local/share/godot/export_templates/4.3.stable/android_debug.apk"
+          test -d /usr/lib/android-sdk
 
-      - name: Prepare Android export
+      - name: Import project and validate main scene
+        shell: bash
         run: |
-          mkdir -p build
+          set -euxo pipefail
           godot --headless --editor --path . --import
+          godot --headless --path . --quit-after 3
 
       - name: Export debug APK
+        shell: bash
         run: |
+          set -euxo pipefail
+          mkdir -p build
           godot --headless --verbose --path . --export-debug "Android" build/living-world-debug.apk
+          test -s build/living-world-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
