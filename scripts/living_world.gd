@@ -36,6 +36,7 @@ var world_material: StandardMaterial3D
 var camera: Camera3D
 var touch_positions: Dictionary = {}
 var previous_pinch_distance := 0.0
+var ui_notice := ""
 var world_root: Node3D
 
 func _ready() -> void:
@@ -107,10 +108,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				camera.position.x = clampf(camera.position.x - drag.relative.x * 0.16, -WORLD_SIZE * 0.5, WORLD_SIZE * 0.5)
 				camera.position.z = clampf(camera.position.z + drag.relative.y * 0.16, -WORLD_SIZE * 0.5, WORLD_SIZE * 0.5)
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+	elif event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			camera.position.y = maxf(28.0, camera.position.y - 7.0)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		elif mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			camera.position.y = minf(135.0, camera.position.y + 7.0)
 
 func _height_at(x: float, z: float) -> float:
@@ -498,15 +500,15 @@ func _save_world() -> void:
 	save_data.set_value("world", "food_amounts", food_amounts)
 	var result := save_data.save("user://living_world.save")
 	if result == OK:
-		status_label.text = "World saved successfully."
+		ui_notice = "World saved successfully."
 	else:
-		status_label.text = "Save failed. Error code: %d" % result
+		ui_notice = "Save failed. Error code: %d" % result
 
 func _load_world() -> void:
 	var save_data := ConfigFile.new()
 	var result := save_data.load("user://living_world.save")
 	if result != OK:
-		status_label.text = "No valid save found yet."
+		ui_notice = "No valid save found yet."
 		return
 	var saved_seed := int(save_data.get_value("world", "seed", world_seed))
 	_configure_seed(saved_seed)
@@ -529,8 +531,9 @@ func _load_world() -> void:
 			source["node"].visible = int(source["food"]) > 0
 		food_sources[i] = source
 	paused = true
+	day_accumulator = 0.0
+	ui_notice = "World loaded. Simulation is paused."
 	_update_interface()
-	status_label.text = "World loaded. Simulation is paused."
 
 func _toggle_pause() -> void:
 	paused = not paused
@@ -560,7 +563,7 @@ func _update_interface() -> void:
 	for person in people:
 		if bool(person["alive"]):
 			alive_count += 1
-	status_label.text = "Year %d  •  Day %d\nLiving people: %d / %d" % [int(elapsed_days / 365) + 1, elapsed_days % 365 + 1, alive_count, FOUNDER_COUNT]
+	status_label.text = "Year %d  •  Day %d\nLiving people: %d / %d%s" % [int(elapsed_days / 365) + 1, elapsed_days % 365 + 1, alive_count, FOUNDER_COUNT, ("\n" + ui_notice) if not ui_notice.is_empty() else ""]
 	seed_label.text = "World seed: %d" % world_seed
 	if pause_button != null:
 		pause_button.text = "Resume" if paused else "Pause"
