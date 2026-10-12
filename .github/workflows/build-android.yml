@@ -13,13 +13,39 @@ jobs:
     steps:
       - name: Check out project
         uses: actions/checkout@v4
+
+      - name: Configure Godot Android export environment
+        run: |
+          # The CI image keeps its preinstalled Godot templates and settings under /root.
+          mkdir -p "$HOME/.local/share/godot" "$HOME/.config"
+          if [ -d /root/.local/share/godot/export_templates ]; then
+            mkdir -p "$HOME/.local/share/godot"
+            cp -a /root/.local/share/godot/export_templates "$HOME/.local/share/godot/"
+          fi
+          if [ -d /root/.config/godot ]; then
+            mkdir -p "$HOME/.config"
+            cp -a /root/.config/godot "$HOME/.config/"
+          fi
+          mkdir -p "$HOME/.config/godot"
+          SETTINGS="$HOME/.config/godot/editor_settings-4.3.tres"
+          touch "$SETTINGS"
+          if ! grep -q 'export/android/java_sdk_path' "$SETTINGS"; then
+            echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> "$SETTINGS"
+          fi
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=/usr/lib/android-sdk" >> "$GITHUB_ENV"
+          java -version
+          ls "$HOME/.local/share/godot/export_templates/4.3.stable"
+
       - name: Prepare Android export
         run: |
           mkdir -p build
           godot --headless --editor --path . --import
+
       - name: Export debug APK
         run: |
-          godot --headless --path . --export-debug "Android" build/living-world-debug.apk
+          godot --headless --verbose --path . --export-debug "Android" build/living-world-debug.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
