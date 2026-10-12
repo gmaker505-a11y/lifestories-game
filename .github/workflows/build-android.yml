@@ -1,0 +1,28 @@
+name: Build Living World Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3.0
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+      - name: Prepare Android export
+        run: |
+          mkdir -p build
+          godot --headless --editor --path . --import
+      - name: Export debug APK
+        run: |
+          godot --headless --path . --export-debug "Android" build/living-world-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-world-android
+          path: build/living-world-debug.apk
+          if-no-files-found: error
