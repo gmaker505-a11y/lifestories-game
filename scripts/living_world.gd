@@ -34,6 +34,8 @@ var speed_button: Button
 var people_button: Button
 var world_material: StandardMaterial3D
 var camera: Camera3D
+var touch_positions: Dictionary = {}
+var previous_pinch_distance := 0.0
 var world_root: Node3D
 
 func _ready() -> void:
@@ -79,6 +81,37 @@ func _process(delta: float) -> void:
 			_advance_day()
 		_move_people(sim_delta)
 	_update_interface()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			touch_positions[touch.index] = touch.position
+			if touch_positions.size() == 2:
+				var points: Array = touch_positions.values()
+				previous_pinch_distance = points[0].distance_to(points[1])
+		else:
+			touch_positions.erase(touch.index)
+			if touch_positions.size() < 2:
+				previous_pinch_distance = 0.0
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if touch_positions.has(drag.index):
+			touch_positions[drag.index] = drag.position
+			if touch_positions.size() >= 2:
+				var points: Array = touch_positions.values()
+				var pinch_distance := points[0].distance_to(points[1])
+				if previous_pinch_distance > 0.0:
+					camera.position.y = clampf(camera.position.y + (previous_pinch_distance - pinch_distance) * 0.12, 28.0, 135.0)
+				previous_pinch_distance = pinch_distance
+			else:
+				camera.position.x = clampf(camera.position.x - drag.relative.x * 0.16, -WORLD_SIZE * 0.5, WORLD_SIZE * 0.5)
+				camera.position.z = clampf(camera.position.z + drag.relative.y * 0.16, -WORLD_SIZE * 0.5, WORLD_SIZE * 0.5)
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			camera.position.y = maxf(28.0, camera.position.y - 7.0)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			camera.position.y = minf(135.0, camera.position.y + 7.0)
 
 func _height_at(x: float, z: float) -> float:
 	var broad := terrain_noise.get_noise_2d(x, z) * 5.8
@@ -445,7 +478,7 @@ func _build_interface() -> void:
 	detail_label.custom_minimum_size = Vector2(280, 100)
 	layout.add_child(detail_label)
 	var footer := Label.new()
-	footer.text = "PURE OBSERVATION  •  ORIGINAL FOUNDERS: 100"
+	footer.text = "Drag to pan • Pinch to zoom\nPURE OBSERVATION  •  ORIGINAL FOUNDERS: 100"
 	footer.add_theme_font_size_override("font_size", 10)
 	layout.add_child(footer)
 
