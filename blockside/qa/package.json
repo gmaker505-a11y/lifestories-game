@@ -1,0 +1,12 @@
+{
+  "name": "blockside-browser-qa",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Automated mobile and desktop browser checks for Blockside",
+  "scripts": {
+    "test": "node browser-test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.51.1"
+  }
+}
