@@ -136,6 +136,17 @@ wss.on('connection', ws => {
     if (msg.type === 'input') {
       const i = msg.input || {};
       for (const key of ['up', 'down', 'left', 'right']) player.input[key] = i[key] === true;
+    } else if (msg.type === 'campfire') {
+      if (msg.action === 'build') {
+        if (room.campfire.built) return send(ws, { type: 'error', message: 'The party campfire is already built.' });
+        if (player.wood < 5) return send(ws, { type: 'error', message: 'A campfire needs 5 wood. Gather more first.' });
+        player.wood -= 5; room.campfire.built = true; room.campfire.fuel = 5;
+      } else if (msg.action === 'fuel') {
+        if (!room.campfire.built) return send(ws, { type: 'error', message: 'Build the campfire first with 5 wood.' });
+        if (player.wood < 1) return send(ws, { type: 'error', message: 'Bring 1 wood to fuel the campfire.' });
+        player.wood -= 1; room.campfire.fuel += 1;
+      } else return send(ws, { type: 'error', message: 'Unknown campfire action.' });
+      broadcast(room);
     } else if (msg.type === 'survival') {
       if (msg.action === 'eat') {
         if (player.berries < 1) return send(ws, { type: 'error', message: 'You need at least 1 berry to eat. Gather berries first.' });
