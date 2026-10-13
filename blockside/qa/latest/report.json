@@ -1,0 +1,116 @@
+{
+  "status": "passed",
+  "timestamp": "2026-10-13T17:23:28.687Z",
+  "page": "http://127.0.0.1:4173/blockside/",
+  "desktop": {
+    "title": "Blockside Browser QA",
+    "started": true,
+    "viewport": {
+      "width": 1280,
+      "height": 800,
+      "dpr": 1
+    },
+    "canvas": {
+      "width": 1280,
+      "height": 800,
+      "visible": true
+    },
+    "counts": {
+      "houses": 15,
+      "trees": 96,
+      "berryBushes": 34,
+      "stones": 45,
+      "flowers": 90,
+      "villagers": 2
+    },
+    "collisions": {
+      "housePairs": [],
+      "treeHits": [],
+      "landmarkHits": []
+    },
+    "player": {
+      "x": 0,
+      "y": 0,
+      "wood": 0,
+      "berries": 0,
+      "coins": 5
+    },
+    "onlineConfigured": false,
+    "checks": {
+      "canvasSize": true,
+      "housePairs": true,
+      "treeHits": true,
+      "landmarkHits": true
+    }
+  },
+  "mobile": {
+    "width": 390,
+    "height": 844,
+    "canvasWidth": 390,
+    "controlsVisible": true,
+    "buttons": [
+      {
+        "id": "gather",
+        "right": 247,
+        "bottom": 753
+      },
+      {
+        "id": "craft",
+        "right": 320,
+        "bottom": 753
+      },
+      {
+        "id": "talk",
+        "right": 375,
+        "bottom": 753
+      },
+      {
+        "id": "rest",
+        "right": 210,
+        "bottom": 788
+      },
+      {
+        "id": "eat",
+        "right": 295,
+        "bottom": 788
+      },
+      {
+        "id": "meal",
+        "right": 375,
+        "bottom": 788
+      },
+      {
+        "id": "campfire",
+        "right": 375,
+        "bottom": 823
+      }
+    ]
+  },
+  "pixelCheck": {
+    "width": 1280,
+    "height": 800,
+    "centerPixel": [
+      145,
+      138,
+      94,
+      255
+    ]
+  },
+  "movement": {
+    "before": {
+      "x": 0,
+      "y": 0,
+      "wood": 0,
+      "berries": 0,
+      "coins": 5
+    },
+    "after": {
+      "x": 51,
+      "y": 0,
+      "wood": 0,
+      "berries": 0,
+      "coins": 5
+    }
+  },
+  "consoleErrors": []
+}
