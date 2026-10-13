@@ -1,0 +1,13 @@
+{
+  "name": "blockside-realm-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Room-based WebSocket server for Blockside: Medieval Realms (maximum four players per room).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": { "ws": "^8.18.0" }
+}
