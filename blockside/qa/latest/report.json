@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "timestamp": "2026-10-13T17:33:04.918Z",
+  "timestamp": "2026-10-13T17:35:36.507Z",
   "page": "http://127.0.0.1:4173/blockside/",
   "desktop": {
     "title": "Blockside Browser QA",
@@ -52,34 +52,39 @@
     "controlsVisible": true,
     "buttons": [
       {
+        "id": "openBag",
+        "right": 241,
+        "bottom": 753
+      },
+      {
         "id": "gather",
-        "right": 247,
+        "right": 302,
         "bottom": 753
       },
       {
         "id": "craft",
-        "right": 320,
+        "right": 375,
         "bottom": 753
       },
       {
         "id": "talk",
-        "right": 375,
-        "bottom": 753
+        "right": 242,
+        "bottom": 788
       },
       {
         "id": "rest",
-        "right": 210,
+        "right": 290,
         "bottom": 788
       },
       {
         "id": "eat",
-        "right": 295,
+        "right": 375,
         "bottom": 788
       },
       {
         "id": "meal",
-        "right": 375,
-        "bottom": 788
+        "right": 299,
+        "bottom": 823
       },
       {
         "id": "campfire",
@@ -92,9 +97,9 @@
     "width": 1280,
     "height": 800,
     "centerPixel": [
-      141,
-      138,
-      93,
+      136,
+      137,
+      89,
       255
     ]
   },
