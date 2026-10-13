@@ -87,7 +87,9 @@ test('room creation, join capacity, and server-ticked movement', async t => {
 test('browser game JavaScript parses without syntax errors', () => {
   const htmlPath = path.join(__dirname, '..', '..', 'index.html');
   const html = fs.readFileSync(htmlPath, 'utf8');
-  const match = html.match(/<script>([\\s\\S]*?)<\\/script>/i);
-  assert.ok(match, 'Expected the game HTML to contain an inline script');
-  assert.doesNotThrow(() => new vm.Script(match[1], { filename: 'blockside/index.html' }));
+  const scriptStart = html.indexOf('<script>');
+  const scriptEnd = html.indexOf('</script>', scriptStart);
+  assert.ok(scriptStart >= 0 && scriptEnd > scriptStart, 'Expected the game HTML to contain an inline script');
+  const script = html.slice(scriptStart + '<script>'.length, scriptEnd);
+  assert.doesNotThrow(() => new vm.Script(script, { filename: 'blockside/index.html' }));
 });
