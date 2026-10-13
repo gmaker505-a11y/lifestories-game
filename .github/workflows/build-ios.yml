@@ -7,6 +7,7 @@ on:
 
 env:
   GODOT_VERSION: "4.3"
+  APP_STORE_TEAM_ID: ${{ secrets.APP_STORE_TEAM_ID }}
 
 jobs:
   export-ios:
@@ -39,14 +40,21 @@ jobs:
           "$GODOT_BIN" --headless --path . --quit-after 3
 
       - name: Export iOS Xcode project
+        if: ${{ env.APP_STORE_TEAM_ID != '' }}
         shell: bash
         run: |
           set -euxo pipefail
           mkdir -p build/ios
+          sed -i.bak "s/application\/app_store_team_id=\"\"/application\/app_store_team_id=\"$APP_STORE_TEAM_ID\"/" export_presets.cfg
           "$GODOT_BIN" --headless --verbose --path . --export-debug "iOS" build/ios/LivingWorld.zip
           test -s build/ios/LivingWorld.zip
 
+      - name: Explain unsigned iOS export is unavailable without Apple team ID
+        if: ${{ env.APP_STORE_TEAM_ID == '' }}
+        run: echo "Project validation passed. iOS export skipped because APP_STORE_TEAM_ID is not configured; add the repository secret to enable export."
+
       - name: Upload iOS export
+        if: ${{ env.APP_STORE_TEAM_ID != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: living-world-ios-xcode-project
