@@ -41,6 +41,34 @@ let villagers=[{id:'cook',name:'Mara the Cook',role:'Cook',x:-75,y:80,activity:'
 let villageState={workshopRepaired:false,mood:'Quiet'};let campfireBuilt=false;let fireFuel=0;
 let W=0,H=0,dpr=1,started=false,worldTime=0;
 const player={x:0,y:0,dir:1,speed:145,wood:0,berries:0,coins:5,hunger:100,energy:100};
+const SAVE_KEY='blockside-save-v1';
+let saveNotice='New adventure';
+function saveSoloGame(){
+ if(netSocket)return;
+ try{
+  const data={version:1,player:{x:player.x,y:player.y,dir:player.dir,wood:player.wood,berries:player.berries,coins:player.coins,hunger:player.hunger,energy:player.energy,cookedMeals:player.cookedMeals||0},worldTime,villageQuest,carpenterQuest,villageState,campfireBuilt,fireFuel,trees:trees.map(t=>({id:t.id,wood:t.wood})),berryBushes:berryBushes.map(b=>({id:b.id,berries:b.berries})),savedAt:Date.now()};
+  localStorage.setItem(SAVE_KEY,JSON.stringify(data));saveNotice='Progress saved';
+ }catch(e){saveNotice='Save unavailable on this browser'}
+}
+function loadSoloGame(){
+ try{
+  const raw=localStorage.getItem(SAVE_KEY);if(!raw)return false;
+  const d=JSON.parse(raw);if(d.version!==1||!d.player)return false;
+  for(const k of ['x','y','dir','wood','berries','coins','hunger','energy','cookedMeals'])if(Number.isFinite(d.player[k]))player[k]=d.player[k];
+  if(Number.isFinite(d.worldTime))worldTime=d.worldTime;
+  if(d.villageQuest)villageQuest={...villageQuest,...d.villageQuest};
+  if(d.carpenterQuest)carpenterQuest={...carpenterQuest,...d.carpenterQuest};
+  if(d.villageState)villageState={...villageState,...d.villageState};
+  campfireBuilt=!!d.campfireBuilt;fireFuel=Number(d.fireFuel)||0;
+  for(const t of d.trees||[]){const n=trees.find(x=>x.id===t.id);if(n&&Number.isFinite(t.wood))n.wood=t.wood}
+  for(const b of d.berryBushes||[]){const n=berryBushes.find(x=>x.id===b.id);if(n&&Number.isFinite(b.berries))n.berries=b.berries}
+  updateLocalVillagers();showSurvival();invEl.textContent='Wood '+player.wood+' · Berries '+player.berries+' · Coins '+player.coins;
+  document.getElementById('talk').textContent=!villageQuest.complete?'COOK '+villageQuest.progress+'/'+villageQuest.target:!carpenterQuest.complete?'BRAM '+carpenterQuest.progress+'/'+carpenterQuest.target:'VILLAGE ✓';
+  saveNotice='Saved adventure restored';return true;
+ }catch(e){saveNotice='Could not load saved adventure';return false}
+}
+let saveAccumulator=0;
+
 let survivalClock=0;player.cookedMeals=0;const survivalEl=document.getElementById('survival');function showSurvival(){survivalEl.textContent='Hunger '+Math.round(player.hunger)+' · Energy '+Math.round(player.energy);document.getElementById('meal').textContent=player.cookedMeals>0?'EAT MEAL ('+player.cookedMeals+')':'COOK MEAL'}
 const keys={up:false,down:false,left:false,right:false};
 let netSocket=null,netPlayerId=null,netRoomCode='',remotePlayers=[],lastInputSent=0;
@@ -104,11 +132,11 @@ function worldDraw(){const camX=player.x,camY=player.y;ctx.fillStyle='#78955a';c
  ctx.restore();
 }
 function render(){ctx.clearRect(0,0,W,H);if(started){if(!netSocket){worldTime+=1/60;updateLocalVillagers()}dayEl.textContent='Day '+(1+Math.floor(worldTime/180))+' · '+(['Early morning','Midday','Late afternoon','Evening'][Math.floor(worldTime/45)%4]);worldDraw();const phase=(worldTime%180)/180;const darkness=Math.max(0,Math.min(.58,(Math.sin((phase-.25)*Math.PI*2)+.25)*.34));if(darkness>.02){ctx.fillStyle='rgba(15,24,48,'+darkness.toFixed(3)+')';ctx.fillRect(0,0,W,H)}if(phase>.48&&phase<.77){ctx.fillStyle='rgba(218,139,74,'+((.77-phase)*.12).toFixed(3)+')';ctx.fillRect(0,0,W,H)}}requestAnimationFrame(render)}
-function update(dt){let dx=(keys.right?1:0)-(keys.left?1:0),dy=(keys.down?1:0)-(keys.up?1:0);if(dx&&dy){dx*=.707;dy*=.707}if(netSocket&&netSocket.readyState===WebSocket.OPEN){const now=performance.now();if(now-lastInputSent>80){netSocket.send(JSON.stringify({type:'input',input:keys}));lastInputSent=now}}else{player.x+=dx*player.speed*dt;player.y+=dy*player.speed*dt;survivalClock+=dt;if(survivalClock>=5){survivalClock=0;player.hunger=Math.max(0,player.hunger-.7);if(dx||dy)player.energy=Math.max(0,player.energy-.45);else player.energy=Math.min(100,player.energy+.35);showSurvival()}}if(dx)player.dir=Math.sign(dx)}
+function update(dt){if(started&&!netSocket){saveAccumulator+=dt;if(saveAccumulator>=5){saveAccumulator=0;saveSoloGame()}}let dx=(keys.right?1:0)-(keys.left?1:0),dy=(keys.down?1:0)-(keys.up?1:0);if(dx&&dy){dx*=.707;dy*=.707}if(netSocket&&netSocket.readyState===WebSocket.OPEN){const now=performance.now();if(now-lastInputSent>80){netSocket.send(JSON.stringify({type:'input',input:keys}));lastInputSent=now}}else{player.x+=dx*player.speed*dt;player.y+=dy*player.speed*dt;survivalClock+=dt;if(survivalClock>=5){survivalClock=0;player.hunger=Math.max(0,player.hunger-.7);if(dx||dy)player.energy=Math.max(0,player.energy-.45);else player.energy=Math.min(100,player.energy+.35);showSurvival()}}if(dx)player.dir=Math.sign(dx)}
 let last=performance.now();function loop(now){const dt=Math.min(.04,(now-last)/1000);last=now;if(started)update(dt);requestAnimationFrame(loop)}requestAnimationFrame(loop);requestAnimationFrame(render);
 document.querySelectorAll('[data-dir]').forEach(b=>{const d=b.dataset.dir;const on=e=>{e.preventDefault();keys[d]=true};const off=e=>{e.preventDefault();keys[d]=false};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off)});
 addEventListener('keydown',e=>{const map={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};if(map[e.key]){keys[map[e.key]]=true;e.preventDefault()}});addEventListener('keyup',e=>{const map={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};if(map[e.key])keys[map[e.key]]=false});
-document.getElementById('start').onclick=()=>{started=true;document.getElementById('intro').classList.add('hidden')};
+document.getElementById('start').onclick=()=>{const restored=loadSoloGame();started=true;document.getElementById('intro').classList.add('hidden');hintEl.textContent=restored?'Welcome back! Your saved adventure has been restored.':'Welcome to Mossbrook. Your adventure begins!'};
 const onlinePanel=document.getElementById('onlinePanel'),onlineStatus=document.getElementById('onlineStatus');
 function showOnline(){onlinePanel.classList.remove('hidden');document.getElementById('intro').classList.add('hidden')}
 function disconnectNet(){if(netSocket){netSocket.close();netSocket=null}netPlayerId=null;netRoomCode='';remotePlayers=[];document.getElementById('players').textContent='Party · 1/4';document.getElementById('net').textContent='LOCAL TEST'}
