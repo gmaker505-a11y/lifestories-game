@@ -17,7 +17,8 @@ The browser client includes **Create Room** and **Join Friend** flows. The Node.
 - Seeded shared wood and berry resource locations.
 - Server-validated gathering: a player must be within 90 world units, the resource must have stock, and gathering has a cooldown.
 - Server-authoritative camp-kit crafting (3 wood + 2 berries per kit) and a shared party objective to prepare 3 kits.
-- A village-cook quest: deliver 5 berries near the village centre for an 8-coin reward; the server validates location, supplies, and completion in online rooms.
+- Living village NPCs: Mara the Cook and Bram the Carpenter follow scheduled routines, with their current activities and positions synchronized to online players.
+- A two-step village quest chain: deliver 5 berries to Mara for 8 coins, then deliver 3 wood to Bram to repair the workshop for 12 coins. The server validates NPC proximity, supplies, quest order, and one-time completion in online rooms.
 - A health endpoint at `/` and `/health`.
 
 ### Run the server
@@ -40,7 +41,7 @@ The server listens on port `2567` by default. Set `PORT` if your host assigns a 
 - Shared resource stock, individual inventories, crafted-kit counts, and party objective progress are included in multiplayer state snapshots.
 - Player coin balances and village-cook quest progress are included in multiplayer snapshots. The one-time quest reward is issued by the server.
 - Crafting is server-validated online; solo mode also supports camp-kit crafting locally. The shared objective completes when the party crafts 3 kits.
-- No persistent saves, combat, expanded recipe system, quest chains, accounts, moderation, or native Android/iOS packages yet.
+- No persistent saves, combat, expanded recipe system beyond the starter camp kit, accounts, moderation, or native Android/iOS packages yet.
 - The project is currently in the `blockside/` folder inside `gmaker505-a11y/lifestories-game`; it is not a separate repository yet.
 
 ## Deploying the online server
