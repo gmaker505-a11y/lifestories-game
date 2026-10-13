@@ -52,7 +52,7 @@ function villageVillagers(seconds, workshopRepaired = false) {
 }
 function publicState(room) {
   return {
-    type: 'state', roomCode: room.code,
+    type: 'state', roomCode: room.code, clockSeconds: room.clockSeconds,
     players: [...room.players.values()].map(p => ({
       id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
       name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits
