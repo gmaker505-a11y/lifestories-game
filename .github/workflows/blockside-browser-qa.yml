@@ -63,4 +63,5 @@ jobs:
           git add blockside/qa/latest/
           if git diff --cached --quiet; then echo "QA screenshots are unchanged"; exit 0; fi
           git commit -m "Update automated Blockside visual QA screenshots [skip ci]"
+          git pull --rebase origin main
           git push
