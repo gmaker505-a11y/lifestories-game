@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: blockside-realm-server
+    runtime: docker
+    plan: free
+    dockerfilePath: ./blockside/server/Dockerfile
+    dockerContext: ./blockside/server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
