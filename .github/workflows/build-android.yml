@@ -31,8 +31,16 @@ jobs:
           mkdir -p "$HOME/.config/godot" "$HOME/.android"
           SETTINGS="$HOME/.config/godot/editor_settings-4.3.tres"
           touch "$SETTINGS"
-          grep -q 'export/android/java_sdk_path' "$SETTINGS" || echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> "$SETTINGS"
-          grep -q 'export/android/android_sdk_path' "$SETTINGS" || echo 'export/android/android_sdk_path = "/usr/lib/android-sdk"' >> "$SETTINGS"
+          if grep -q 'export/android/java_sdk_path' "$SETTINGS"; then
+            sed -i 's|^export/android/java_sdk_path = .*|export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"|' "$SETTINGS"
+          else
+            echo 'export/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"' >> "$SETTINGS"
+          fi
+          if grep -q 'export/android/android_sdk_path' "$SETTINGS"; then
+            sed -i 's|^export/android/android_sdk_path = .*|export/android/android_sdk_path = "/usr/lib/android-sdk"|' "$SETTINGS"
+          else
+            echo 'export/android/android_sdk_path = "/usr/lib/android-sdk"' >> "$SETTINGS"
+          fi
           keytool -genkeypair -noprompt -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -storetype JKS
           SDKMANAGER=/usr/lib/android-sdk/cmdline-tools/cmdline-tools/bin/sdkmanager
           test -x "$SDKMANAGER"
