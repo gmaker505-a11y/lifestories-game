@@ -42,6 +42,12 @@ function createResources() {
   }
   return nodes;
 }
+function villageVillagers(seconds) {
+  const phase = seconds % 180;
+  const cook = phase < 60 ? { x: 55, y: 48, activity: 'Serving breakfast' } : phase < 120 ? { x: 155, y: 130, activity: 'Picking herbs' } : { x: 20, y: 90, activity: 'Resting by the well' };
+  const carpenter = phase < 80 ? { x: 110, y: 50, activity: 'Working at the bench' } : phase < 140 ? { x: 150, y: -40, activity: 'Checking the timber' } : { x: 85, y: 25, activity: 'Closing the workshop' };
+  return [{ id: 'cook', name: 'Mara the Cook', role: 'Cook', ...cook }, { id: 'carpenter', name: 'Bram the Carpenter', role: 'Carpenter', ...carpenter }];
+}
 function publicState(room) {
   return {
     type: 'state', roomCode: room.code,
@@ -50,8 +56,12 @@ function publicState(room) {
       name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits
     })),
     objective: { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: room.objective.kits, target: room.objective.target, complete: room.objective.kits >= room.objective.target },
-    quest: { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to the cook near the village centre', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
-    
+    quest: { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to Mara the Cook', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
+    quests: {
+      cook: { id: 'village-cook', title: 'Help the village cook', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
+      carpenter: { id: 'carpenter-wood', title: 'Repair the village workshop', progress: room.carpenterQuest.delivered, target: room.carpenterQuest.target, complete: room.carpenterQuest.complete, reward: room.carpenterQuest.reward, unlocked: room.quest.complete }
+    },
+    villagers: villageVillagers(room.clockSeconds),
     resources: room.resources.map(({ id, kind, x, y, remaining }) => ({ id, kind, x: Math.round(x), y: Math.round(y), remaining }))
   };
 }
@@ -107,7 +117,7 @@ wss.on('connection', ws => {
     if (msg.type === 'create') {
       if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
       const code = roomCode();
-      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 }, quest: { delivered: 0, target: 5, complete: false, reward: 8 } });
+      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 }, quest: { delivered: 0, target: 5, complete: false, reward: 8 }, carpenterQuest: { delivered: 0, target: 3, complete: false, reward: 12 }, clockSeconds: 0 });
       return joinRoom(ws, code, msg.name);
     }
     if (msg.type === 'join') {
@@ -133,19 +143,37 @@ wss.on('connection', ws => {
       room.objective.kits++;
       broadcast(room);
     } else if (msg.type === 'quest') {
-      if (msg.questId !== 'village-cook') return send(ws, { type: 'error', message: 'Unknown village quest.' });
-      if (Math.hypot(player.x, player.y) > 130)
-        return send(ws, { type: 'error', message: 'The village cook is near the village centre. Come closer to deliver supplies.' });
-      if (room.quest.complete) return send(ws, { type: 'error', message: 'The village cook has all the berries needed. Quest complete!' });
-      if (player.berries < room.quest.target - room.quest.delivered)
-        return send(ws, { type: 'error', message: 'The cook needs 5 berries. Gather more before delivering.' });
-      const needed = room.quest.target - room.quest.delivered;
-      player.berries -= needed;
-      player.coins = Math.min(999999, player.coins + room.quest.reward);
-      room.quest.delivered += needed;
-      room.quest.complete = room.quest.delivered >= room.quest.target;
-      broadcast(room);
-      send(ws, { type: 'notice', message: 'Quest complete! The village cook paid you ' + room.quest.reward + ' coins.' });
+      const villagers = villageVillagers(room.clockSeconds);
+      if (msg.questId === 'village-cook') {
+        const cook = villagers.find(v => v.id === 'cook');
+        if (Math.hypot(player.x - cook.x, player.y - cook.y) > 95)
+          return send(ws, { type: 'error', message: 'Find Mara the Cook at her current location before delivering berries.' });
+        if (room.quest.complete) return send(ws, { type: 'error', message: 'Mara has all the berries needed. The carpenter quest is now unlocked.' });
+        const needed = room.quest.target - room.quest.delivered;
+        if (player.berries < needed) return send(ws, { type: 'error', message: 'Mara needs 5 berries. Gather them before delivering.' });
+        player.berries -= needed;
+        player.coins = Math.min(999999, player.coins + room.quest.reward);
+        room.quest.delivered += needed;
+        room.quest.complete = room.quest.delivered >= room.quest.target;
+        broadcast(room);
+        return send(ws, { type: 'notice', message: 'Quest complete! Mara paid you ' + room.quest.reward + ' coins. Bram the Carpenter has a new task.' });
+      }
+      if (msg.questId === 'carpenter-wood') {
+        if (!room.quest.complete) return send(ws, { type: 'error', message: 'Help Mara the Cook first to unlock Bram’s workshop quest.' });
+        const carpenter = villagers.find(v => v.id === 'carpenter');
+        if (Math.hypot(player.x - carpenter.x, player.y - carpenter.y) > 95)
+          return send(ws, { type: 'error', message: 'Find Bram the Carpenter at his current location before delivering wood.' });
+        if (room.carpenterQuest.complete) return send(ws, { type: 'error', message: 'The workshop repair is complete. The villagers thank you!' });
+        const needed = room.carpenterQuest.target - room.carpenterQuest.delivered;
+        if (player.wood < needed) return send(ws, { type: 'error', message: 'Bram needs 3 wood to repair the workshop. Gather more timber.' });
+        player.wood -= needed;
+        player.coins = Math.min(999999, player.coins + room.carpenterQuest.reward);
+        room.carpenterQuest.delivered += needed;
+        room.carpenterQuest.complete = room.carpenterQuest.delivered >= room.carpenterQuest.target;
+        broadcast(room);
+        return send(ws, { type: 'notice', message: 'Workshop repaired! Bram paid you ' + room.carpenterQuest.reward + ' coins. The village is ready for more visitors.' });
+      }
+      return send(ws, { type: 'error', message: 'Unknown village quest.' });
     } else if (msg.type === 'gather') {
       if (now - player.lastGatherAt < GATHER_COOLDOWN_MS)
         return send(ws, { type: 'error', message: 'Give it a moment before gathering again.' });
@@ -169,6 +197,7 @@ wss.on('connection', ws => {
 });
 const tick = setInterval(() => {
   for (const room of rooms.values()) {
+    room.clockSeconds += TICK_MS / 1000;
     for (const p of room.players.values()) {
       let dx = Number(p.input.right) - Number(p.input.left);
       let dy = Number(p.input.down) - Number(p.input.up);
