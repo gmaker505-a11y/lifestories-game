@@ -2,7 +2,7 @@
 
 **“We create the conditions. The people create the world.”**
 
-Living World is an Android-first Godot 4 project for a naturalistic, autonomous world simulation. The design target is a vast world where human lives, families, ecosystems and societies emerge through cause and effect rather than a fixed story.
+Living World is a Godot 4 project for a naturalistic, autonomous world simulation on Android and iOS. The design target is a vast world where human lives, families, ecosystems and societies emerge through cause and effect rather than a fixed story.
 
 ## Current playable-foundation work
 
@@ -16,8 +16,8 @@ The current prototype includes:
 - Simulation pause and three time speeds.
 - A person-inspection panel showing age, health, hunger, thirst and current action.
 - Touchscreen drag-to-pan and pinch-to-zoom controls.
-- Save/load controls using the device's local user://living_world.save file.
-- A GitHub Actions workflow intended to validate the Godot project and export an Android debug APK.
+- Save/load controls using the device's local `user://living_world.save` file.
+- GitHub Actions workflows intended to validate the project and export Android and iOS builds.
 
 This is an early foundation, not the completed game. Births and descendants, family relationships, wildlife populations, deep ecology, settlements, culture, trade and long-term history remain future milestones.
 
@@ -33,15 +33,18 @@ This is an early foundation, not the completed game. Births and descendants, fam
 
 ## Open the project
 
-Open project.godot with Godot 4.x. The main scene is scenes/main.tscn, and the current world prototype is in scripts/living_world.gd.
+Open `project.godot` with Godot 4.3. The main scene is `scenes/main.tscn`, and the current world prototype is in `scripts/living_world.gd`.
 
 ## Build status
 
-Android APK creation is automated through .github/workflows/build-android.yml. An APK should only be considered ready when the latest workflow run succeeds and the uploaded artifact is verified. A successful GitHub commit alone does not prove that the APK builds or that the game has been tested on a phone.
+- Android: `.github/workflows/build-android.yml` is intended to validate the project and export a debug APK.
+- iOS: `.github/workflows/build-ios.yml` is intended to validate the project and export an iOS Xcode project archive on a macOS runner.
+
+These workflows must finish successfully before their outputs can be treated as build-ready. The iOS export is not the same as an App Store-ready signed app: publishing to a physical iPhone or the App Store requires Apple signing credentials, provisioning and the usual Apple developer workflow. A GitHub commit alone does not prove the game builds or works on a device.
 
 ## Roadmap
 
-1. Verify Godot project parsing and Android APK export.
+1. Verify Godot project parsing and Android/iOS exports.
 2. Stabilise the generated world, camera and save/load foundation.
 3. Add needs, skills, memory, age and robust individual decision-making.
 4. Add parentage, family trees, births, descendants and permanent death.
