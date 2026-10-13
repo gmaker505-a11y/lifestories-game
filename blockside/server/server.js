@@ -47,9 +47,11 @@ function publicState(room) {
     type: 'state', roomCode: room.code,
     players: [...room.players.values()].map(p => ({
       id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
-      name: p.name, wood: p.wood, berries: p.berries, craftedKits: p.craftedKits
+      name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits
     })),
     objective: { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: room.objective.kits, target: room.objective.target, complete: room.objective.kits >= room.objective.target },
+    quest: { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to the cook near the village centre', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
+    
     resources: room.resources.map(({ id, kind, x, y, remaining }) => ({ id, kind, x: Math.round(x), y: Math.round(y), remaining }))
   };
 }
@@ -76,7 +78,7 @@ function joinRoom(ws, code, requestedName) {
     id, ws, name: String(requestedName || 'Traveller').trim().slice(0, 18) || 'Traveller',
     x: room.players.size * 28, y: 0, vx: 0, vy: 0, color: room.players.size,
     input: { up: false, down: false, left: false, right: false },
-    wood: 0, berries: 0, craftedKits: 0, lastGatherAt: 0
+    wood: 0, berries: 0, coins: 5, craftedKits: 0, lastGatherAt: 0
   };
   room.players.set(id, player);
   sockets.set(ws, { roomCode: room.code, playerId: id });
@@ -105,7 +107,7 @@ wss.on('connection', ws => {
     if (msg.type === 'create') {
       if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
       const code = roomCode();
-      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 } });
+      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 }, quest: { delivered: 0, target: 5, complete: false, reward: 8 } });
       return joinRoom(ws, code, msg.name);
     }
     if (msg.type === 'join') {
@@ -130,6 +132,20 @@ wss.on('connection', ws => {
       player.craftedKits++;
       room.objective.kits++;
       broadcast(room);
+    } else if (msg.type === 'quest') {
+      if (msg.questId !== 'village-cook') return send(ws, { type: 'error', message: 'Unknown village quest.' });
+      if (Math.hypot(player.x, player.y) > 130)
+        return send(ws, { type: 'error', message: 'The village cook is near the village centre. Come closer to deliver supplies.' });
+      if (room.quest.complete) return send(ws, { type: 'error', message: 'The village cook has all the berries needed. Quest complete!' });
+      if (player.berries < room.quest.target - room.quest.delivered)
+        return send(ws, { type: 'error', message: 'The cook needs 5 berries. Gather more before delivering.' });
+      const needed = room.quest.target - room.quest.delivered;
+      player.berries -= needed;
+      player.coins = Math.min(999999, player.coins + room.quest.reward);
+      room.quest.delivered += needed;
+      room.quest.complete = room.quest.delivered >= room.quest.target;
+      broadcast(room);
+      send(ws, { type: 'notice', message: 'Quest complete! The village cook paid you ' + room.quest.reward + ' coins.' });
     } else if (msg.type === 'gather') {
       if (now - player.lastGatherAt < GATHER_COOLDOWN_MS)
         return send(ws, { type: 'error', message: 'Give it a moment before gathering again.' });
