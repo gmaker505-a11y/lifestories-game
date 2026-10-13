@@ -55,7 +55,7 @@ function publicState(room) {
     type: 'state', roomCode: room.code, clockSeconds: room.clockSeconds,
     players: [...room.players.values()].map(p => ({
       id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
-      name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits
+      name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits, hunger: Math.round(p.hunger), energy: Math.round(p.energy)
     })),
     objective: { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: room.objective.kits, target: room.objective.target, complete: room.objective.kits >= room.objective.target },
     quest: { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to Mara the Cook', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
@@ -91,7 +91,7 @@ function joinRoom(ws, code, requestedName) {
     id, ws, name: String(requestedName || 'Traveller').trim().slice(0, 18) || 'Traveller',
     x: room.players.size * 28, y: 0, vx: 0, vy: 0, color: room.players.size,
     input: { up: false, down: false, left: false, right: false },
-    wood: 0, berries: 0, coins: 5, craftedKits: 0, lastGatherAt: 0
+    wood: 0, berries: 0, coins: 5, craftedKits: 0, hunger: 100, energy: 100, lastGatherAt: 0
   };
   room.players.set(id, player);
   sockets.set(ws, { roomCode: room.code, playerId: id });
@@ -136,6 +136,12 @@ wss.on('connection', ws => {
     if (msg.type === 'input') {
       const i = msg.input || {};
       for (const key of ['up', 'down', 'left', 'right']) player.input[key] = i[key] === true;
+    } else if (msg.type === 'survival') {
+      if (msg.action !== 'rest') return send(ws, { type: 'error', message: 'Unknown survival action.' });
+      player.energy = Math.min(100, player.energy + 22);
+      player.hunger = Math.max(0, player.hunger - 2);
+      broadcast(room);
+      return send(ws, { type: 'notice', message: 'You rested and recovered energy. Keep food handy for the road.' });
     } else if (msg.type === 'craft') {
       if (msg.recipe !== 'camp-kit') return send(ws, { type: 'error', message: 'Unknown recipe.' });
       if (player.wood < 3 || player.berries < 2)
@@ -202,9 +208,11 @@ const tick = setInterval(() => {
   for (const room of rooms.values()) {
     room.clockSeconds += TICK_MS / 1000;
     for (const p of room.players.values()) {
+      p.hunger = Math.max(0, p.hunger - 0.0035);
       let dx = Number(p.input.right) - Number(p.input.left);
       let dy = Number(p.input.down) - Number(p.input.up);
       if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+      if (dx || dy) p.energy = Math.max(0, p.energy - 0.0022); else p.energy = Math.min(100, p.energy + 0.0015);
       p.x = Math.max(-3000, Math.min(3000, p.x + dx * SPEED * TICK_MS / 1000));
       p.y = Math.max(-3000, Math.min(3000, p.y + dy * SPEED * TICK_MS / 1000));
     }
