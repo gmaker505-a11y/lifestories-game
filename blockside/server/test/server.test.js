@@ -59,6 +59,11 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   const firstState = await firstStatePromise;
   assert.ok(firstState.resources.some(r => r.kind === 'wood' && r.remaining > 0));
   assert.ok(firstState.resources.some(r => r.kind === 'berries' && r.remaining > 0));
+  assert.deepEqual(firstState.objective, { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: 0, target: 3, complete: false });
+  const recipeError = nextMessage(host, m => m.type === 'error' && /3 wood and 2 berries/i.test(m.message));
+  send(host, { type: 'craft', recipe: 'camp-kit' });
+  assert.match((await recipeError).message, /3 wood and 2 berries/i);
+  // The server does not consume materials or advance the party goal on an invalid craft.
 
   for (let i = 0; i < 3; i++) {
     const ws = await connect(); clients.push(ws);
