@@ -15,6 +15,7 @@ The browser client includes **Create Room** and **Join Friend** flows. The Node.
 - A hard four-player room capacity (host plus three friends).
 - Server-ticked movement and player-position snapshots.
 - Survival needs: hunger slowly decreases over time, energy decreases while moving and recovers while idle, eating a berry restores hunger, and resting restores energy. Multiplayer survival values and actions are server-authoritative.
+- Build a shared campfire for 5 wood, then fuel it with additional wood. The fire's built/fuel state is synchronized for everyone in the room; solo mode supports the same building loop.
 - Seeded shared wood and berry resource locations.
 - Server-validated gathering: a player must be within 90 world units, the resource must have stock, and gathering has a cooldown.
 - Server-authoritative camp-kit crafting (3 wood + 2 berries per kit) and a shared party objective to prepare 3 kits.
