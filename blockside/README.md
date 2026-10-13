@@ -14,6 +14,7 @@ The browser client includes **Create Room** and **Join Friend** flows. The Node.
 - Server-ticked movement and player-position snapshots.
 - Seeded shared wood and berry resource locations.
 - Server-validated gathering: a player must be within 90 world units, the resource must have stock, and gathering has a cooldown.
+- Server-authoritative camp-kit crafting (3 wood + 2 berries per kit) and a shared party objective to prepare 3 kits.
 - A health endpoint at `/` and `/health`.
 
 ### Run the server
@@ -33,8 +34,9 @@ The server listens on port `2567` by default. Set `PORT` if your host assigns a 
 
 - The local browser game remains playable without a server.
 - The online server now validates resource type, remaining stock, player proximity, and a short gather cooldown.
-- Shared server resource stock is included in multiplayer state snapshots. Browser-side visual depletion and gathering feedback still need further polish.
-- No persistent saves, combat, crafting, quests, accounts, moderation, or native Android/iOS packages yet.
+- Shared resource stock, individual inventories, crafted-kit counts, and party objective progress are included in multiplayer state snapshots.
+- Crafting is server-validated online; solo mode also supports camp-kit crafting locally. The shared objective completes when the party crafts 3 kits.
+- No persistent saves, combat, expanded recipe system, quest chains, accounts, moderation, or native Android/iOS packages yet.
 - The project is currently in the `blockside/` folder inside `gmaker505-a11y/lifestories-game`; it is not a separate repository yet.
 
 ## Deploying the online server
