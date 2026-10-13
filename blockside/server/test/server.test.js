@@ -11,14 +11,10 @@ const WebSocket = require('ws');
 const PORT = 25681;
 const BASE = 'http://127.0.0.1:' + PORT;
 let child;
-
 function wait(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 async function waitForServer() {
   for (let i = 0; i < 60; i++) {
-    try {
-      const r = await fetch(BASE + '/health');
-      if (r.ok) return;
-    } catch {}
+    try { const r = await fetch(BASE + '/health'); if (r.ok) return; } catch {}
     await wait(100);
   }
   throw new Error('Server did not start in time');
@@ -44,14 +40,11 @@ function nextMessage(ws, predicate = () => true, timeout = 2500) {
 }
 function send(ws, data) { ws.send(JSON.stringify(data)); }
 
-test('room creation, join capacity, and server-ticked movement', async t => {
+test('room creation, join capacity, server movement, and resource snapshots', async t => {
   child = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
     env: { ...process.env, PORT: String(PORT) }, stdio: 'ignore'
   });
-  t.after(async () => {
-    child?.kill('SIGTERM');
-    await wait(100);
-  });
+  t.after(async () => { child?.kill('SIGTERM'); await wait(100); });
   await waitForServer();
   const clients = [];
   t.after(() => clients.forEach(ws => { try { ws.close(); } catch {} }));
@@ -62,15 +55,17 @@ test('room creation, join capacity, and server-ticked movement', async t => {
   const created = await joinedPromise;
   assert.match(created.roomCode, /^[A-HJ-NP-Z2-9]{5}$/);
   assert.equal(created.capacity, 4);
+  const firstStatePromise = nextMessage(host, m => m.type === 'state');
+  const firstState = await firstStatePromise;
+  assert.ok(firstState.resources.some(r => r.kind === 'wood' && r.remaining > 0));
+  assert.ok(firstState.resources.some(r => r.kind === 'berries' && r.remaining > 0));
 
   for (let i = 0; i < 3; i++) {
     const ws = await connect(); clients.push(ws);
     const joinPromise = nextMessage(ws, m => m.type === 'joined');
     send(ws, { type: 'join', code: created.roomCode, name: 'Friend' + i });
-    const result = await joinPromise;
-    assert.equal(result.roomCode, created.roomCode);
+    assert.equal((await joinPromise).roomCode, created.roomCode);
   }
-
   const full = await connect(); clients.push(full);
   const errorPromise = nextMessage(full, m => m.type === 'error');
   send(full, { type: 'join', code: created.roomCode, name: 'TooMany' });
@@ -80,8 +75,12 @@ test('room creation, join capacity, and server-ticked movement', async t => {
   await statePromise;
   const movedPromise = nextMessage(host, m => m.type === 'state' && m.players.some(p => p.name === 'Host' && p.x > 0));
   send(host, { type: 'input', input: { right: true } });
-  const moved = await movedPromise;
-  assert.ok(moved.players.find(p => p.name === 'Host').x > 0);
+  assert.ok((await movedPromise).players.find(p => p.name === 'Host').x > 0);
+  send(host, { type: 'input', input: { right: false } });
+
+  const rejectedPromise = nextMessage(host, m => m.type === 'error' && /closer/i.test(m.message));
+  send(host, { type: 'gather', kind: 'wood' });
+  assert.match((await rejectedPromise).message, /closer/i);
 });
 
 test('browser game JavaScript parses without syntax errors', () => {
