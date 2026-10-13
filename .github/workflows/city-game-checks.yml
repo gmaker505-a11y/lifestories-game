@@ -1,0 +1,22 @@
+name: Check Blockside
+on:
+  push:
+    branches: [city-online-mvp]
+    paths:
+      - 'city-game/**'
+      - '.github/workflows/city-game-checks.yml'
+  pull_request:
+    paths:
+      - 'city-game/**'
+      - '.github/workflows/city-game-checks.yml'
+  workflow_dispatch:
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check game file and core features
+        run: node --test city-game/tests/smoke.test.mjs
