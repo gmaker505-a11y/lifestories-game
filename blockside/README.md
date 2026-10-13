@@ -2,6 +2,8 @@
 
 A mobile-first, top-down medieval co-op adventure prototype for Android and iOS browsers.
 
+**Project goal: free for personal use with friends.** No ads, in-game purchases, paid assets, or subscription features are planned. Keep development on free tools and free hosting tiers wherever possible. Free hosting can have limits or sleep when idle, so reliable always-on multiplayer cannot be promised at zero cost.
+
 ## Play the browser prototype
 
 Open [index.html](./index.html) directly, or enable GitHub Pages for the repository and open the `/blockside/` path on the published site.
