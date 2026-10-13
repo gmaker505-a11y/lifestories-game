@@ -62,6 +62,8 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   assert.deepEqual(firstState.objective, { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: 0, target: 3, complete: false });
   assert.deepEqual(firstState.quest, { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to Mara the Cook', progress: 0, target: 5, complete: false, reward: 8 });
   assert.deepEqual(firstState.quests.carpenter, { id: 'carpenter-wood', title: 'Repair the village workshop', progress: 0, target: 3, complete: false, reward: 12, unlocked: false });
+  assert.equal(firstState.village.workshopRepaired, false);
+  assert.equal(firstState.village.mood, 'Quiet');
   assert.equal(firstState.villagers.length, 2);
   assert.ok(firstState.villagers.some(v => v.name === 'Mara the Cook'));
   assert.ok(firstState.villagers.some(v => v.name === 'Bram the Carpenter'));
@@ -117,4 +119,6 @@ test('browser game JavaScript parses without syntax errors', () => {
   assert.doesNotThrow(() => new vm.Script(script, { filename: 'blockside/index.html' }));
   assert.match(script, /function updateLocalVillagers\(\)/);
   assert.match(script, /carpenter-wood/);
+  assert.match(script, /workshopRepaired/);
+  assert.match(script, /The workshop is open/);
 });
