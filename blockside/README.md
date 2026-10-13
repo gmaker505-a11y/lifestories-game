@@ -8,6 +8,16 @@ A mobile-first, top-down medieval co-op adventure prototype for Android and iOS 
 
 Open [index.html](./index.html) directly, or enable GitHub Pages for the repository and open the `/blockside/` path on the published site.
 
+## Project layout
+
+- `index.html` — browser game, canvas rendering, touch controls, solo gameplay, and online client.
+- `server/server.js` — authoritative WebSocket rooms, movement, gathering, crafting, quests, campfire, and survival state.
+- `server/test/server.test.js` — automated multiplayer integration and browser-script syntax checks.
+- `server/package.json` — Node.js dependencies and test/start scripts.
+- `.github/workflows/` — automated Pages deployment, server tests, and native project build/export checks.
+
+Keep browser rendering separate from server authority: gameplay that affects shared inventory, resources, quests, or survival must be validated by the server in online rooms.
+
 ## Multiplayer phase
 
 The browser client includes **Create Room** and **Join Friend** flows. The Node.js WebSocket server under `server/` provides:
@@ -16,6 +26,7 @@ The browser client includes **Create Room** and **Join Friend** flows. The Node.
 - Server-ticked movement and player-position snapshots.
 - Survival needs: hunger slowly decreases over time, energy decreases while moving and recovers while idle, eating a berry restores hunger, and resting restores energy. Multiplayer survival values and actions are server-authoritative.
 - Build a shared campfire for 5 wood, then fuel it with additional wood. The fire's built/fuel state is synchronized for everyone in the room; solo mode supports the same building loop.
+- Cook a meal at a lit campfire using 2 berries and 1 fuel; eating it restores more hunger than a raw berry. Cooking, fuel use, and meal inventory are server-validated online.
 - Seeded shared wood and berry resource locations.
 - Server-validated gathering: a player must be within 90 world units, the resource must have stock, and gathering has a cooldown.
 - Server-authoritative camp-kit crafting (3 wood + 2 berries per kit) and a shared party objective to prepare 3 kits.
@@ -40,7 +51,9 @@ The server listens on port `2567` by default. Set `PORT` if your host assigns a 
 ## Current status and limitations
 
 - The local browser game remains playable without a server.
-- The online server now validates resource type, remaining stock, player proximity, and a short gather cooldown.
+- The online server validates resource type, remaining stock, player proximity, and a short gather cooldown.
+- Village houses use placement checks against other houses, trees, and reserved landmark areas to reduce overlaps.
+- Automated server tests cover room capacity, movement, resource snapshots, quests, campfire state, survival actions, and browser JavaScript syntax. Check the Actions tab for the latest result before treating a change as verified.
 - Shared resource stock, individual inventories, crafted-kit counts, and party objective progress are included in multiplayer state snapshots.
 - Player coin balances and village-cook quest progress are included in multiplayer snapshots. The one-time quest reward is issued by the server.
 - Crafting is server-validated online; solo mode also supports camp-kit crafting locally. The shared objective completes when the party crafts 3 kits.
