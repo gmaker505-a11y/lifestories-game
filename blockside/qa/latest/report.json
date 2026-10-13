@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "timestamp": "2026-10-13T17:23:28.687Z",
+  "timestamp": "2026-10-13T17:29:59.643Z",
   "page": "http://127.0.0.1:4173/blockside/",
   "desktop": {
     "title": "Blockside Browser QA",
@@ -26,7 +26,8 @@
     "collisions": {
       "housePairs": [],
       "treeHits": [],
-      "landmarkHits": []
+      "landmarkHits": [],
+      "resourceHits": []
     },
     "player": {
       "x": 0,
@@ -40,7 +41,8 @@
       "canvasSize": true,
       "housePairs": true,
       "treeHits": true,
-      "landmarkHits": true
+      "landmarkHits": true,
+      "resourcesClear": true
     }
   },
   "mobile": {
@@ -90,9 +92,9 @@
     "width": 1280,
     "height": 800,
     "centerPixel": [
-      145,
-      138,
-      94,
+      148,
+      140,
+      95,
       255
     ]
   },
