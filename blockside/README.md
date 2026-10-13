@@ -8,11 +8,12 @@ Open [index.html](./index.html) directly, or enable GitHub Pages for the reposit
 
 ## Multiplayer phase
 
-The browser client now includes **Create Room** and **Join Friend** flows. The Node.js WebSocket server under `server/` provides:
+The browser client includes **Create Room** and **Join Friend** flows. The Node.js WebSocket server under `server/` provides:
 - Five-character room codes.
 - A hard four-player room capacity (host plus three friends).
-- Server-ticked movement and shared player-position snapshots.
-- Basic shared wood/berry inventory counters.
+- Server-ticked movement and player-position snapshots.
+- Seeded shared wood and berry resource locations.
+- Server-validated gathering: a player must be within 90 world units, the resource must have stock, and gathering has a cooldown.
 - A health endpoint at `/` and `/health`.
 
 ### Run the server
@@ -31,23 +32,14 @@ The server listens on port `2567` by default. Set `PORT` if your host assigns a 
 ## Current status and limitations
 
 - The local browser game remains playable without a server.
-- Online client/server room protocol has been added, but it still needs automated checks and a real hosted-server test before it should be considered production-ready.
-- Resource gathering is currently a prototype counter; it is not yet validated against server-side world resource locations.
+- The online server now validates resource type, remaining stock, player proximity, and a short gather cooldown.
+- Shared server resource stock is included in multiplayer state snapshots. Browser-side visual depletion and gathering feedback still need further polish.
 - No persistent saves, combat, crafting, quests, accounts, moderation, or native Android/iOS packages yet.
 - The project is currently in the `blockside/` folder inside `gmaker505-a11y/lifestories-game`; it is not a separate repository yet.
 
-## Next milestones
-
-1. Verify server protocol with automated tests and CI.
-2. Deploy the WebSocket server and test four real devices/clients in one room.
-3. Make gathering and world interactions server-validated; add reconnection handling.
-4. Add crafting, quests, persistent saves, and better mobile feedback.
-5. Package for Android and iOS after browser multiplayer is stable.
-
-
 ## Deploying the online server
 
-A Render deployment blueprint is included at the repository root (`render.yaml`) with a Dockerfile in `blockside/server/`. To deploy it, open the repository's Render blueprint/import flow, connect this GitHub repository, and apply the blueprint. Hosting providers may require account setup and may sleep on free plans.
+A Render deployment blueprint is included at the repository root (`render.yaml`) with a Dockerfile in `server/`. To deploy it, open the repository's Render blueprint/import flow, connect this GitHub repository, and apply the blueprint. Hosting providers may require account setup and may sleep on free plans.
 
 After the service is deployed:
 1. Open the server's HTTPS base URL and check that it returns JSON with `"status":"ok"`.
