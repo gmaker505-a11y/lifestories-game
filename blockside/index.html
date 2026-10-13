@@ -47,7 +47,7 @@ let saveNotice='New adventure';
 function saveSoloGame(){
  if(netSocket)return;
  try{
-  const data={version:1,player:{x:player.x,y:player.y,dir:player.dir,wood:player.wood,berries:player.berries,coins:player.coins,hunger:player.hunger,energy:player.energy,cookedMeals:player.cookedMeals||0},worldTime,partyObjective,villageQuest,carpenterQuest,villageState,campfireBuilt,fireFuel,trees:trees.map(t=>({id:t.id,wood:t.wood})),berryBushes:berryBushes.map(b=>({id:b.id,berries:b.berries})),savedAt:Date.now()};
+  const data={version:1,houses:houses.map(h=>({...h})),player:{x:player.x,y:player.y,dir:player.dir,wood:player.wood,berries:player.berries,coins:player.coins,hunger:player.hunger,energy:player.energy,cookedMeals:player.cookedMeals||0},worldTime,partyObjective,villageQuest,carpenterQuest,villageState,campfireBuilt,fireFuel,trees:trees.map(t=>({id:t.id,wood:t.wood})),berryBushes:berryBushes.map(b=>({id:b.id,berries:b.berries})),savedAt:Date.now()};
   localStorage.setItem(SAVE_KEY,JSON.stringify(data));saveNotice='Progress saved';
  }catch(e){saveNotice='Save unavailable on this browser'}
 }
@@ -57,6 +57,7 @@ function loadSoloGame(){
   const d=JSON.parse(raw);if(d.version!==1||!d.player)return false;
   for(const k of ['x','y','dir','wood','berries','coins','hunger','energy','cookedMeals'])if(Number.isFinite(d.player[k]))player[k]=d.player[k];
   if(Number.isFinite(d.worldTime))worldTime=d.worldTime;
+  if(Array.isArray(d.houses)){houses.length=0;for(const h of d.houses){if(h&&houseSpotIsClear(h))houses.push({...h})}}
   if(d.partyObjective)partyObjective={...partyObjective,...d.partyObjective};
   if(d.villageQuest)villageQuest={...villageQuest,...d.villageQuest};
   if(d.carpenterQuest)carpenterQuest={...carpenterQuest,...d.carpenterQuest};
@@ -74,6 +75,7 @@ let saveAccumulator=0;
 let survivalClock=0;player.cookedMeals=0;const survivalEl=document.getElementById('survival');function showSurvival(){survivalEl.textContent='Hunger '+Math.round(player.hunger)+' · Energy '+Math.round(player.energy);document.getElementById('meal').textContent=player.cookedMeals>0?'EAT MEAL ('+player.cookedMeals+')':'COOK MEAL'}
 const keys={up:false,down:false,left:false,right:false};
 let netSocket=null,netPlayerId=null,netRoomCode='',remotePlayers=[],lastInputSent=0;
+let placingHome=false,homeRotation=0,homePreview={x:0,y:0,w:72,h:54,c:'#a65e43'};
 const trees=[],berryBushes=[],houses=[],stones=[],flowers=[];
 let seed=58321;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
 for(let i=0;i<100;i++){const x=(rand()-.5)*1700,y=(rand()-.5)*1300;if(Math.abs(x)<120&&Math.abs(y)<100)continue;trees.push({id:i,x,y,r:17+rand()*12,wood:3});}
