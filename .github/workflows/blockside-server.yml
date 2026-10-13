@@ -1,0 +1,34 @@
+name: Blockside Multiplayer Server
+
+on:
+  push:
+    paths:
+      - 'blockside/server/**'
+      - 'blockside/index.html'
+      - '.github/workflows/blockside-server.yml'
+  pull_request:
+    paths:
+      - 'blockside/server/**'
+      - 'blockside/index.html'
+      - '.github/workflows/blockside-server.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        working-directory: blockside/server
+        run: npm install
+      - name: Check server syntax
+        working-directory: blockside/server
+        run: npm run check
+      - name: Test multiplayer rooms
+        working-directory: blockside/server
+        run: npm test
