@@ -137,9 +137,14 @@ wss.on('connection', ws => {
       const i = msg.input || {};
       for (const key of ['up', 'down', 'left', 'right']) player.input[key] = i[key] === true;
     } else if (msg.type === 'survival') {
-      if (msg.action !== 'rest') return send(ws, { type: 'error', message: 'Unknown survival action.' });
-      player.energy = Math.min(100, player.energy + 22);
-      player.hunger = Math.max(0, player.hunger - 2);
+      if (msg.action === 'eat') {
+        if (player.berries < 1) return send(ws, { type: 'error', message: 'You need at least 1 berry to eat. Gather berries first.' });
+        player.berries -= 1;
+        player.hunger = Math.min(100, player.hunger + 28);
+      } else if (msg.action === 'rest') {
+        player.energy = Math.min(100, player.energy + 22);
+        player.hunger = Math.max(0, player.hunger - 2);
+      } else return send(ws, { type: 'error', message: 'Unknown survival action.' });
       broadcast(room);
       return send(ws, { type: 'notice', message: 'You rested and recovered energy. Keep food handy for the road.' });
     } else if (msg.type === 'craft') {
