@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "timestamp": "2026-10-13T17:30:48.338Z",
+  "timestamp": "2026-10-13T17:33:04.918Z",
   "page": "http://127.0.0.1:4173/blockside/",
   "desktop": {
     "title": "Blockside Browser QA",
@@ -92,9 +92,9 @@
     "width": 1280,
     "height": 800,
     "centerPixel": [
-      148,
-      140,
-      95,
+      141,
+      138,
+      93,
       255
     ]
   },
@@ -107,7 +107,7 @@
       "coins": 5
     },
     "after": {
-      "x": 51,
+      "x": 53,
       "y": 0,
       "wood": 0,
       "berries": 0,
