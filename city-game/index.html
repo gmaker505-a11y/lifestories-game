@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#101923"><meta name="description" content="A tiny online multiplayer 2D city sandbox.">
+<title>Blockside — Online City</title>
+<style>
+:root{color-scheme:dark;--bg:#101923;--panel:#182632;--line:#2b414e;--text:#edf5f7;--muted:#9fb4bd;--mint:#7ce0bd;--gold:#ffc979}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,Segoe UI,sans-serif;touch-action:none}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block;background:#6c9d82}
+.top{position:absolute;left:12px;right:12px;top:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;pointer-events:none}.brand,.status,.panel,.pill{background:#101923eF;border:1px solid #ffffff1c;border-radius:14px;box-shadow:0 8px 28px #0003}.brand{padding:10px 13px}.brand strong{display:block;font-size:16px;letter-spacing:.08em}.brand span{color:var(--muted);font-size:11px}.status{padding:9px 11px;color:var(--mint);font-size:12px;max-width:48%;text-align:right}
+.panel{position:absolute;left:12px;top:83px;padding:10px;width:min(220px,52vw);pointer-events:auto}.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 8px}.row{display:flex;gap:6px;margin-bottom:6px}.row input{min-width:0;flex:1}.input,button{font:inherit;color:var(--text);background:#203440;border:1px solid #38515f;border-radius:9px;padding:9px 10px;outline:none}.input{width:100%}button{cursor:pointer}button.primary{background:var(--mint);color:#10241f;border-color:transparent;font-weight:750}button:active{transform:scale(.98)}.small{font-size:11px;color:var(--muted);line-height:1.4}.peerline{font-size:11px;word-break:break-all;color:var(--gold);margin-top:6px}.hide{display:none!important}
+.bottom{position:absolute;left:12px;right:12px;bottom:12px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;pointer-events:none}.joystick{width:126px;height:126px;border-radius:50%;background:#10192388;border:2px solid #ffffff50;position:relative;pointer-events:auto;touch-action:none}.stick{position:absolute;width:48px;height:48px;border-radius:50%;background:#e7f7f2d9;border:2px solid #fff;left:37px;top:37px;box-shadow:0 4px 15px #0004}.actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:auto}.actions button{min-width:96px;min-height:42px;background:#101923eF}.hint{font-size:11px;color:#fff;background:#101923b8;border-radius:10px;padding:7px 9px;max-width:180px;text-align:right}
+#toast{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);background:#101923f2;border:1px solid #ffffff25;border-radius:12px;padding:12px 16px;max-width:85vw;text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
+#chat{position:absolute;right:12px;top:83px;width:min(205px,44vw);pointer-events:auto}.messages{max-height:115px;overflow:hidden;font-size:11px;color:#d7e4e8;margin-bottom:6px;text-shadow:0 1px 2px #000}.chatrow{display:flex;gap:4px}.chatrow input{width:100%;min-width:0}.chatrow button{padding:8px}
+@media(min-width:800px){.panel{width:240px}.bottom{left:22px;right:22px;bottom:20px}.joystick{width:142px;height:142px}.stick{left:44px;top:44px}#chat{width:230px}.messages{max-height:180px}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Top-down city game"></canvas>
+<div class="top"><div class="brand"><strong>BLOCKSIDE <span style="color:var(--mint)">●</span></strong><span>ONLINE CITY SANDBOX · PRE-ALPHA</span></div><div id="status" class="status">● Starting city…</div></div>
+<section class="panel"><h2>Join the city</h2><div class="row"><button id="host" class="primary">Create room</button></div><div class="row"><input id="room" class="input" placeholder="Friend's room code" maxlength="80" autocomplete="off"><button id="join">Join</button></div><div id="peerline" class="peerline">Room code appears here</div><p class="small">Share your room code with a friend. Both players need an internet connection. Multiplayer uses peer-to-peer networking via PeerJS; this prototype has no authoritative anti-cheat server.</p></section>
+<section id="chat" class="panel"><h2>City chat</h2><div id="messages" class="messages">Welcome to Blockside. Say hello!</div><div class="chatrow"><input id="chatinput" class="input" placeholder="Message…" maxlength="120"><button id="send">Send</button></div></section>
+<div class="bottom"><div id="joy" class="joystick" aria-label="Movement joystick"><div id="stick" class="stick"></div></div><div class="actions"><div class="hint">Move with the pad or WASD / arrow keys</div><button id="wave">👋 Wave</button><button id="reset">↺ Respawn</button></div></div>
+<div id="toast"></div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),status=document.getElementById('status'),roomInput=document.getElementById('room'),peerline=document.getElementById('peerline'),messages=document.getElementById('messages'),toastEl=document.getElementById('toast');
+let W=0,H=0,dpr=1,peer=null,conn=null,connections=[],playerId='local',worldTime=0,lastSend=0,toastTimer=0;
+const me={x:0,y:0,name:'YOU',color:'#7ce0bd',vx:0,vy:0,wave:0};const others=new Map();const keys=new Set();let stick={x:0,y:0,active:false};
+const buildings=[];for(let y=-900;y<1000;y+=260)for(let x=-1000;x<1100;x+=300){buildings.push({x:x+25,y:y+22,w:170+(Math.abs(x+y)%40),h:135+(Math.abs(x-y)%35),c:(Math.abs(x*3+y*7)%4)})}
+const roads=[-780,-520,-260,0,260,520,780];function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
+function say(text){toastEl.textContent=text;toastEl.style.opacity='1';clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.style.opacity='0',2200)}
+function setStatus(s){status.textContent='● '+s}
+function addMessage(text){const p=document.createElement('div');p.textContent=text;messages.appendChild(p);while(messages.children.length>6)messages.firstChild.remove()}
+function worldToScreen(x,y){return{x:W/2+x-me.x,y:H/2+y-me.y}}
+function draw(){ctx.clearRect(0,0,W,H);ctx.fillStyle='#6d9a79';ctx.fillRect(0,0,W,H);
+ // city blocks and street grid
+ for(let x=-1200;x<=1200;x+=260){let sx=W/2+x-me.x;ctx.fillStyle='#3b4549';ctx.fillRect(sx-35,0,70,H);ctx.fillStyle='#c8c2a0';for(let yy=(worldTime*0.25)%60;yy<H;yy+=60){ctx.fillRect(sx-2,yy,4,27)}}
+ for(let y=-1100;y<=1100;y+=260){let sy=H/2+y-me.y;ctx.fillStyle='#3b4549';ctx.fillRect(0,sy-35,W,70);ctx.fillStyle='#c8c2a0';for(let xx=0;xx<W;xx+=60)ctx.fillRect(xx,sy-2,27,4)}
+ for(const b of buildings){const p=worldToScreen(b.x,b.y);if(p.x<-250||p.y<-250||p.x>W+250||p.y>H+250)continue;
+ ctx.fillStyle='#4d6657';ctx.fillRect(p.x-4,p.y+7,b.w+8,b.h+8);const colors=['#d6bca0','#b7c8c7','#c7a8a2','#d4cba6'];ctx.fillStyle=colors[b.c];ctx.fillRect(p.x,p.y,b.w,b.h);ctx.fillStyle='#8e9994';ctx.fillRect(p.x,p.y,b.w,12);
+ for(let wy=22;wy<b.h-10;wy+=28)for(let wx=12;wx<b.w-10;wx+=26){ctx.fillStyle='#6f9fa4';ctx.fillRect(p.x+wx,p.y+wy,11,13)}
+ ctx.fillStyle='#536a59';ctx.fillRect(p.x+b.w/2-12,p.y+b.h-25,24,25)}
+ // little trees and park details
+ for(let i=0;i<28;i++){const x=((i*173)%1800)-900,y=((i*293)%1700)-850,p=worldToScreen(x,y);if(p.x<0||p.y<0||p.x>W||p.y>H)continue;ctx.fillStyle='#386b4e';ctx.beginPath();ctx.arc(p.x,p.y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#4f885e';ctx.beginPath();ctx.arc(p.x-3,p.y-3,6,0,Math.PI*2);ctx.fill()}
+ for(const o of others.values())drawPerson(o,false);drawPerson(me,true);
+ // subtle minimap
+ const mx=W-100,my=H-88;ctx.fillStyle='#101923c9';ctx.fillRect(mx,my,88,72);ctx.strokeStyle='#ffffff55';ctx.strokeRect(mx,my,88,72);for(const b of buildings){let x=mx+44+(b.x-me.x)*.035,y=my+36+(b.y-me.y)*.035;if(x>mx&&x<mx+88&&y>my&&y<my+72){ctx.fillStyle='#879a96';ctx.fillRect(x,y,3,3)}}ctx.fillStyle='#7ce0bd';ctx.beginPath();ctx.arc(mx+44,my+36,3,0,7);ctx.fill();
+}
+function drawPerson(p,isMe){const s=worldToScreen(p.x,p.y);if(s.x<-30||s.y<-30||s.x>W+30||s.y>H+30)return;ctx.fillStyle='#0004';ctx.beginPath();ctx.ellipse(s.x,s.y+9,10,5,0,0,7);ctx.fill();ctx.fillStyle=p.color||'#ffc979';ctx.beginPath();ctx.arc(s.x,s.y,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#24333b';ctx.fillRect(s.x-5,s.y+6,10,10);ctx.fillStyle='#fff';ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillText(isMe?'YOU':(p.name||'PLAYER'),s.x,s.y-15);if(p.wave>0){ctx.font='17px sans-serif';ctx.fillText('👋',s.x+13,s.y-15)}}
+function tick(t){const dt=Math.min(.035,(t-(tick.prev||t))/1000);tick.prev=t;worldTime+=dt*60;
+ let dx=(keys.has('ArrowRight')||keys.has('d')?1:0)-(keys.has('ArrowLeft')||keys.has('a')?1:0)+stick.x;let dy=(keys.has('ArrowDown')||keys.has('s')?1:0)-(keys.has('ArrowUp')||keys.has('w')?1:0)+stick.y;const l=Math.hypot(dx,dy)||1;dx/=l;dy/=l;const speed=170;me.vx=dx*speed;me.vy=dy*speed;me.x+=me.vx*dt;me.y+=me.vy*dt;me.wave=Math.max(0,me.wave-dt);for(const p of others.values())p.wave=Math.max(0,(p.wave||0)-dt);
+ if(conn&&conn.open&&t-lastSend>70){lastSend=t;conn.send({type:'state',x:me.x,y:me.y,name:me.name,color:me.color,wave:me.wave})}
+ draw();requestAnimationFrame(tick)}requestAnimationFrame(tick);
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();keys.add(k)});addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));addEventListener('blur',()=>keys.clear());
+const joy=document.getElementById('joy'),knob=document.getElementById('stick');function joyMove(e){const r=joy.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let x=(e.clientX-cx)/(r.width*.34),y=(e.clientY-cy)/(r.height*.34),l=Math.hypot(x,y);if(l>1){x/=l;y/=l}stick.x=x;stick.y=y;knob.style.transform='translate('+x*35+'px,'+y*35+'px)'}joy.addEventListener('pointerdown',e=>{stick.active=true;joy.setPointerCapture(e.pointerId);joyMove(e)});joy.addEventListener('pointermove',e=>{if(stick.active)joyMove(e)});function joyEnd(){stick.active=false;stick.x=stick.y=0;knob.style.transform='translate(0,0)'}joy.addEventListener('pointerup',joyEnd);joy.addEventListener('pointercancel',joyEnd);
+function handleData(data){if(!data||typeof data!=='object')return;if(data.type==='state'&&Number.isFinite(data.x)&&Number.isFinite(data.y)){others.set(conn.peer,{x:data.x,y:data.y,name:String(data.name||'PLAYER').slice(0,16),color:'#ffc979',wave:Number(data.wave)||0})}else if(data.type==='chat'){addMessage((String(data.name||'Player').slice(0,16))+': '+String(data.text||'').slice(0,120))}else if(data.type==='wave'){const p=others.get(conn.peer);if(p)p.wave=1.5}}
+function attachConnection(c){conn=c;c.on('open',()=>{setStatus('Connected · '+c.peer.slice(0,8));peerline.textContent='Connected to '+c.peer.slice(0,20);say('Connected to another player!');addMessage('Connected to '+c.peer.slice(0,12));c.send({type:'state',x:me.x,y:me.y,name:me.name,color:me.color,wave:0})});c.on('data',handleData);c.on('close',()=>{others.delete(c.peer);if(conn===c){conn=null;setStatus('Disconnected')}});c.on('error',e=>say('Connection issue: '+e.type))}
+function ensurePeer(){if(!window.Peer){say('Could not load multiplayer library. Check your internet.');setStatus('Offline demo');return null}if(peer)return peer;peer=new Peer(undefined,{debug:1});peer.on('open',id=>{playerId=id;roomInput.value=id;peerline.textContent='Your room code: '+id;setStatus('Online · room ready');say('Room created. Share the code with a friend.')});peer.on('connection',c=>attachConnection(c));peer.on('error',e=>{setStatus('Network issue');say('Network issue: '+e.type)});return peer}
+document.getElementById('host').addEventListener('click',()=>{if(conn){conn.close();conn=null}const p=ensurePeer();if(p&&p.open){roomInput.value=p.id;peerline.textContent='Your room code: '+p.id;setStatus('Room ready · waiting');say('Share your room code with a friend.')}else setStatus('Starting room…')});
+document.getElementById('join').addEventListener('click',()=>{const id=roomInput.value.trim();if(!id){say('Enter your friend’s room code first.');return}const p=ensurePeer();const connect=()=>{if(id===p.id){say('That is your own room code. Ask a friend for theirs.');return}setStatus('Connecting…');attachConnection(p.connect(id,{reliable:true}))};if(p&&p.open)connect();else if(p)p.once('open',connect)});
+function sendChat(){const input=document.getElementById('chatinput'),text=input.value.trim();if(!text)return;addMessage('YOU: '+text);if(conn&&conn.open)conn.send({type:'chat',name:me.name,text});else say('You are not connected to another player yet.');input.value=''}document.getElementById('send').addEventListener('click',sendChat);document.getElementById('chatinput').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat()});
+document.getElementById('wave').addEventListener('click',()=>{me.wave=1.5;if(conn&&conn.open)conn.send({type:'wave'})});document.getElementById('reset').addEventListener('click',()=>{me.x=me.y=0;say('Back at the city square.')});
+setStatus('City ready · offline mode');say('Welcome to Blockside! Create a room to play online.');
+})();
+</script>
+</body></html>
