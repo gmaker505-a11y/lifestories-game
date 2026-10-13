@@ -60,6 +60,10 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   assert.ok(firstState.resources.some(r => r.kind === 'wood' && r.remaining > 0));
   assert.ok(firstState.resources.some(r => r.kind === 'berries' && r.remaining > 0));
   assert.deepEqual(firstState.objective, { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: 0, target: 3, complete: false });
+  assert.deepEqual(firstState.quest, { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to the cook near the village centre', progress: 0, target: 5, complete: false, reward: 8 });
+  const questSupplyError = nextMessage(host, m => m.type === 'error' && /needs 5 berries/i.test(m.message));
+  send(host, { type: 'quest', questId: 'village-cook' });
+  assert.match((await questSupplyError).message, /needs 5 berries/i);
   const recipeError = nextMessage(host, m => m.type === 'error' && /3 wood and 2 berries/i.test(m.message));
   send(host, { type: 'craft', recipe: 'camp-kit' });
   assert.match((await recipeError).message, /3 wood and 2 berries/i);
@@ -86,6 +90,14 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   const rejectedPromise = nextMessage(host, m => m.type === 'error' && /closer/i.test(m.message));
   send(host, { type: 'gather', kind: 'wood' });
   assert.match((await rejectedPromise).message, /closer/i);
+
+  const farAwayPromise = nextMessage(host, m => m.type === 'state' && m.players.some(p => p.name === 'Host' && Math.abs(p.x) > 150));
+  send(host, { type: 'input', input: { right: true } });
+  await farAwayPromise;
+  send(host, { type: 'input', input: { right: false } });
+  const distantQuestError = nextMessage(host, m => m.type === 'error' && /village centre/i.test(m.message));
+  send(host, { type: 'quest', questId: 'village-cook' });
+  assert.match((await distantQuestError).message, /village centre/i);
 });
 
 test('browser game JavaScript parses without syntax errors', () => {
