@@ -102,9 +102,9 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   send(host, { type: 'input', input: { right: true } });
   await farAwayPromise;
   send(host, { type: 'input', input: { right: false } });
-  const distantQuestError = nextMessage(host, m => m.type === 'error' && /village centre/i.test(m.message));
+  const distantQuestError = nextMessage(host, m => m.type === 'error' && /current location/i.test(m.message));
   send(host, { type: 'quest', questId: 'village-cook' });
-  assert.match((await distantQuestError).message, /village centre/i);
+  assert.match((await distantQuestError).message, /current location/i);
 });
 
 test('browser game JavaScript parses without syntax errors', () => {
