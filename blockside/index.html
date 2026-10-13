@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#17251c">
+<title>Blockside: Medieval Co-op</title>
+<style>
+:root{color-scheme:dark;--ink:#f7f0db;--panel:#1c2a20eF;--gold:#e6bd69;--muted:#b8c4ad}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101a14;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:none}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated}
+.hud{position:absolute;inset:0;pointer-events:none;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom);display:flex;flex-direction:column;justify-content:space-between}
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.card{background:var(--panel);border:1px solid #d9c58d55;border-radius:13px;padding:10px 12px;box-shadow:0 4px 18px #0004;backdrop-filter:blur(5px)}.brand{font-weight:900;letter-spacing:.08em;color:var(--gold);font-size:12px}.place{font-size:17px;font-weight:800}.stats{font-size:12px;color:var(--muted);margin-top:3px}.right{text-align:right}.pill{border:1px solid #e6bd6970;border-radius:99px;padding:5px 9px;font-size:11px;color:var(--gold);display:inline-block;margin-top:5px}
+.bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;padding-bottom:max(10px,env(safe-area-inset-bottom))}.hint{max-width:54%;font-size:12px;line-height:1.35;color:#f3efd9}.actions{display:flex;gap:7px;pointer-events:auto}.action{background:#24382aee;border:1px solid #e6bd6990;color:var(--ink);border-radius:12px;padding:12px 13px;font-weight:750;font-size:12px;box-shadow:0 4px 12px #0005;min-width:58px}.action:active{transform:scale(.96);background:#4d633d}.controls{position:absolute;left:14px;bottom:105px;width:130px;height:130px;pointer-events:auto;opacity:.9}.pad{position:absolute;width:42px;height:42px;border-radius:12px;border:1px solid #e6bd6980;background:#1c2a20dd;color:white;font-size:20px;display:grid;place-items:center;user-select:none}.pad.up{left:44px;top:0}.pad.down{left:44px;bottom:0}.pad.left{left:0;top:44px}.pad.right{right:0;top:44px}
+.overlay{position:absolute;inset:0;background:#09120ddd;display:flex;align-items:center;justify-content:center;padding:22px;pointer-events:auto}.modal{width:min(430px,100%);border:1px solid #d9bd7370;background:#1c2b20;border-radius:20px;padding:24px;box-shadow:0 20px 60px #0008}.modal h1{font-size:30px;line-height:1.05;margin:8px 0 12px}.modal p{color:#c9d2c2;line-height:1.5;font-size:14px}.modal .action{width:100%;margin-top:8px;background:#92713b;color:#fff8e9;font-size:15px;padding:14px}.small{font-size:11px;color:#aebaa7;margin-top:12px}.hidden{display:none!important}
+@media(min-width:800px){.controls{left:24px;bottom:30px}.bottom{padding-bottom:18px}.place{font-size:20px}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Medieval village game world"></canvas>
+<div class="hud">
+ <div class="top">
+  <div class="card"><div class="brand">BLOCKSIDE • REALMS</div><div class="place">Mossbrook Village</div><div class="stats" id="day">Day 1 · Early morning</div></div>
+  <div class="card right"><div id="players">Party · 1/4</div><div class="stats" id="inventory">Wood 0 · Berries 0 · Coins 5</div><div class="pill" id="net">LOCAL TEST</div></div>
+ </div>
+ <div class="bottom"><div class="card hint" id="hint">Explore the village. Gather berries and wood, meet villagers, and prepare for the road.</div><div class="actions"><button class="action" id="gather">GATHER</button><button class="action" id="talk">TALK</button></div></div>
+</div>
+<div class="controls" aria-label="Movement controls">
+ <button class="pad up" data-dir="up" aria-label="Move up">▲</button><button class="pad down" data-dir="down" aria-label="Move down">▼</button><button class="pad left" data-dir="left" aria-label="Move left">◀</button><button class="pad right" data-dir="right" aria-label="Move right">▶</button>
+</div>
+<div class="overlay" id="intro"><div class="modal"><div class="brand">A SMALL WORLD. A SHARED ADVENTURE.</div><h1>Blockside:<br>Medieval Realms</h1><p>A cosy medieval co-op adventure for a party of <b>up to four players</b>. Explore a village, gather supplies and set out into a living countryside.</p><p>This first browser prototype lets you explore and test the touch controls. Online rooms are the next milestone and need a hosted multiplayer server before real friends can join.</p><button class="action" id="start">ENTER THE REALM</button><div class="small">Prototype · Progress is not saved yet · Online play not connected</div></div></div>
+<script>
+(()=>{'use strict';
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const dayEl=document.getElementById('day'),invEl=document.getElementById('inventory'),hintEl=document.getElementById('hint');
+let W=0,H=0,dpr=1,started=false,worldTime=0;
+const player={x:0,y:0,dir:1,speed:145,wood:0,berries:0,coins:5};
+const keys={up:false,down:false,left:false,right:false};
+const trees=[],berryBushes=[],houses=[],stones=[],flowers=[];
+let seed=58321;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
+for(let i=0;i<100;i++){const x=(rand()-.5)*1700,y=(rand()-.5)*1300;if(Math.abs(x)<120&&Math.abs(y)<100)continue;trees.push({x,y,r:17+rand()*12});}
+for(let i=0;i<34;i++){berryBushes.push({x:(rand()-.5)*1200,y:(rand()-.5)*850,r:10+rand()*5,berries:2+Math.floor(rand()*4)});}
+for(let i=0;i<15;i++){houses.push({x:(rand()-.5)*520,y:(rand()-.5)*350,w:52+rand()*25,h:39+rand()*18,c:['#a65e43','#b78050','#79634e','#985b50'][Math.floor(rand()*4)]});}
+for(let i=0;i<90;i++)flowers.push({x:(rand()-.5)*1500,y:(rand()-.5)*1100,c:['#e8c66b','#e7d8b8','#c57e9b'][Math.floor(rand()*3)]});
+for(let i=0;i<45;i++)stones.push({x:(rand()-.5)*1400,y:(rand()-.5)*1050,r:4+rand()*7});
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
+function roundRect(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function drawTree(x,y,r){ctx.fillStyle='#263e2b';ctx.beginPath();ctx.ellipse(x+3,y+8,r*1.1,r*.65,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#63442e';ctx.fillRect(x-4,y-2,8,18);ctx.fillStyle='#315a35';ctx.beginPath();ctx.arc(x,y-8,r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#477543';ctx.beginPath();ctx.arc(x-r*.28,y-r*.25,r*.64,0,Math.PI*2);ctx.fill();ctx.fillStyle='#628b4e';ctx.beginPath();ctx.arc(x+r*.18,y-r*.35,r*.35,0,Math.PI*2);ctx.fill()}
+function drawHouse(h){const x=h.x,y=h.y;ctx.fillStyle='#382d24';ctx.fillRect(x-h.w/2+4,y-h.h/2+10,h.w,h.h);ctx.fillStyle='#d4bd91';ctx.fillRect(x-h.w/2,y-h.h/2+5,h.w,h.h);ctx.fillStyle=h.c;ctx.beginPath();ctx.moveTo(x-h.w/2-7,y-h.h/2+8);ctx.lineTo(x,y-h.h/2-h.h*.52);ctx.lineTo(x+h.w/2+7,y-h.h/2+8);ctx.closePath();ctx.fill();ctx.fillStyle='#4a3027';ctx.fillRect(x-6,y+3,12,h.h/2);ctx.fillStyle='#f1d18a';ctx.fillRect(x-h.w*.31,y-3,9,11);ctx.fillStyle='#51372b';ctx.fillRect(x-h.w*.31,y-3,9,2);ctx.fillRect(x-h.w*.31+4,y-3,2,11)}
+function worldDraw(){const camX=player.x,camY=player.y;ctx.fillStyle='#78955a';ctx.fillRect(0,0,W,H);const left=-camX-W/2,top=-camY-H/2;
+ // patchy grass and a winding dirt lane
+ for(let y=Math.floor(top/56)*56;y<top+H+56;y+=56)for(let x=Math.floor(left/56)*56;x<left+W+56;x+=56){const n=Math.abs(Math.sin(x*12.31+y*2.73));ctx.fillStyle=n>.66?'#819c61':n>.3?'#7b965a':'#759054';ctx.fillRect(x-camX+W/2,y-camY+H/2,56,56)}
+ ctx.save();ctx.translate(W/2-camX,H/2-camY);
+ ctx.strokeStyle='#b9a078';ctx.lineWidth=48;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-900,130);ctx.bezierCurveTo(-400,90,-180,150,20,20);ctx.bezierCurveTo(210,-100,450,-70,900,-200);ctx.stroke();ctx.strokeStyle='#c9b18a';ctx.lineWidth=32;ctx.stroke();
+ for(const f of flowers){if(f.x<camX-W/2-10||f.x>camX+W/2+10||f.y<camY-H/2-10||f.y>camY+H/2+10)continue;ctx.fillStyle=f.c;ctx.fillRect(f.x-1,f.y-1,3,3)}
+ for(const s of stones){ctx.fillStyle='#999b87';ctx.beginPath();ctx.ellipse(s.x,s.y,s.r,s.r*.65,-.2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#c1c1a9';ctx.fillRect(s.x-2,s.y-2,3,2)}
+ for(const h of houses)drawHouse(h);
+ for(const b of berryBushes){ctx.fillStyle='#345c35';ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#64864a';ctx.beginPath();ctx.arc(b.x-3,b.y-3,b.r*.7,0,Math.PI*2);ctx.fill();for(let i=0;i<Math.min(b.berries,4);i++){ctx.fillStyle='#8d3348';ctx.beginPath();ctx.arc(b.x+(i%2)*6-3,b.y+Math.floor(i/2)*5-1,2.3,0,Math.PI*2);ctx.fill()}}
+ for(const t of trees)if(t.x>camX-W/2-40&&t.x<camX+W/2+40&&t.y>camY-H/2-40&&t.y<camY+H/2+40)drawTree(t.x,t.y,t.r);
+ // village signpost
+ ctx.fillStyle='#68452d';ctx.fillRect(88,12,7,44);ctx.fillStyle='#d0b37a';ctx.fillRect(68,13,46,18);ctx.fillStyle='#45372a';ctx.font='bold 8px system-ui';ctx.fillText('MOSSBROOK',71,25);
+ // player shadow and adventurer
+ ctx.fillStyle='#34432c';ctx.beginPath();ctx.ellipse(player.x,player.y+8,12,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#45382b';ctx.fillRect(player.x-7,player.y-3,5,13);ctx.fillRect(player.x+2,player.y-3,5,13);ctx.fillStyle='#476f8a';ctx.fillRect(player.x-9,player.y-14,18,15);ctx.fillStyle='#c9a477';ctx.beginPath();ctx.arc(player.x,player.y-19,7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#69452f';ctx.fillRect(player.x-8,player.y-25,16,5);ctx.fillStyle='#ede0c4';ctx.fillRect(player.x-5,player.y-20,10,3);
+ ctx.restore();
+}
+function render(){ctx.clearRect(0,0,W,H);worldDraw();if(started){worldTime+=1/60;dayEl.textContent='Day '+(1+Math.floor(worldTime/180))+' · '+(['Early morning','Midday','Late afternoon','Evening'][Math.floor(worldTime/45)%4]);}requestAnimationFrame(render)}
+function update(dt){let dx=(keys.right?1:0)-(keys.left?1:0),dy=(keys.down?1:0)-(keys.up?1:0);if(dx&&dy){dx*=.707;dy*=.707}player.x+=dx*player.speed*dt;player.y+=dy*player.speed*dt;if(dx)player.dir=Math.sign(dx)}
+let last=performance.now();function loop(now){const dt=Math.min(.04,(now-last)/1000);last=now;if(started)update(dt);requestAnimationFrame(loop)}requestAnimationFrame(loop);requestAnimationFrame(render);
+document.querySelectorAll('[data-dir]').forEach(b=>{const d=b.dataset.dir;const on=e=>{e.preventDefault();keys[d]=true};const off=e=>{e.preventDefault();keys[d]=false};b.addEventListener('pointerdown',on);b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off)});
+addEventListener('keydown',e=>{const map={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};if(map[e.key]){keys[map[e.key]]=true;e.preventDefault()}});addEventListener('keyup',e=>{const map={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};if(map[e.key])keys[map[e.key]]=false});
+document.getElementById('start').onclick=()=>{started=true;document.getElementById('intro').classList.add('hidden')};
+document.getElementById('gather').onclick=()=>{let nearest=null,dist=Infinity,kind='';for(const t of trees){const d=Math.hypot(t.x-player.x,t.y-player.y);if(d<dist){dist=d;nearest=t;kind='tree'}}for(const b of berryBushes){const d=Math.hypot(b.x-player.x,b.y-player.y);if(d<dist){dist=d;nearest=b;kind='berry'}}if(dist>90){hintEl.textContent='Move closer to a tree or berry bush to gather resources.'}else if(kind==='tree'){player.wood+=2;hintEl.textContent='You collected 2 pieces of fallen wood. A sturdy start for crafting.'}else if(nearest.berries>0){const n=Math.min(2,nearest.berries);nearest.berries-=n;player.berries+=n;hintEl.textContent='You gathered '+n+' wild berries. Keep some for the road!'}else{hintEl.textContent='This bush has no berries left. Try another nearby.'}invEl.textContent='Wood '+player.wood+' · Berries '+player.berries+' · Coins '+player.coins};
+document.getElementById('talk').onclick=()=>{const d=Math.min(...houses.map(h=>Math.hypot(h.x-player.x,h.y-player.y)));hintEl.textContent=d<110?'A village farmer says: “Roads are rough beyond the old mill. Take food, and watch the tree line.”':'No one is close enough to talk. Try the village centre.'};
+document.getElementById('net').onclick=()=>{hintEl.textContent='Online co-op is planned for up to 4 players. A multiplayer server and room system still need to be connected.'};
+})();
+</script>
+</body>
+</html>
