@@ -47,8 +47,9 @@ function publicState(room) {
     type: 'state', roomCode: room.code,
     players: [...room.players.values()].map(p => ({
       id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
-      name: p.name, wood: p.wood, berries: p.berries
+      name: p.name, wood: p.wood, berries: p.berries, craftedKits: p.craftedKits
     })),
+    objective: { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: room.objective.kits, target: room.objective.target, complete: room.objective.kits >= room.objective.target },
     resources: room.resources.map(({ id, kind, x, y, remaining }) => ({ id, kind, x: Math.round(x), y: Math.round(y), remaining }))
   };
 }
@@ -75,7 +76,7 @@ function joinRoom(ws, code, requestedName) {
     id, ws, name: String(requestedName || 'Traveller').trim().slice(0, 18) || 'Traveller',
     x: room.players.size * 28, y: 0, vx: 0, vy: 0, color: room.players.size,
     input: { up: false, down: false, left: false, right: false },
-    wood: 0, berries: 0, lastGatherAt: 0
+    wood: 0, berries: 0, craftedKits: 0, lastGatherAt: 0
   };
   room.players.set(id, player);
   sockets.set(ws, { roomCode: room.code, playerId: id });
@@ -104,7 +105,7 @@ wss.on('connection', ws => {
     if (msg.type === 'create') {
       if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
       const code = roomCode();
-      rooms.set(code, { code, players: new Map(), resources: createResources() });
+      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 } });
       return joinRoom(ws, code, msg.name);
     }
     if (msg.type === 'join') {
@@ -120,6 +121,15 @@ wss.on('connection', ws => {
     if (msg.type === 'input') {
       const i = msg.input || {};
       for (const key of ['up', 'down', 'left', 'right']) player.input[key] = i[key] === true;
+    } else if (msg.type === 'craft') {
+      if (msg.recipe !== 'camp-kit') return send(ws, { type: 'error', message: 'Unknown recipe.' });
+      if (player.wood < 3 || player.berries < 2)
+        return send(ws, { type: 'error', message: 'Camp kit needs 3 wood and 2 berries. Gather more supplies.' });
+      player.wood -= 3;
+      player.berries -= 2;
+      player.craftedKits++;
+      room.objective.kits++;
+      broadcast(room);
     } else if (msg.type === 'gather') {
       if (now - player.lastGatherAt < GATHER_COOLDOWN_MS)
         return send(ws, { type: 'error', message: 'Give it a moment before gathering again.' });
