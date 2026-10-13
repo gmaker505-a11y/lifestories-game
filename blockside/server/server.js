@@ -55,7 +55,7 @@ function publicState(room) {
     type: 'state', roomCode: room.code, clockSeconds: room.clockSeconds,
     players: [...room.players.values()].map(p => ({
       id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
-      name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits, hunger: Math.round(p.hunger), energy: Math.round(p.energy)
+      name: p.name, wood: p.wood, berries: p.berries, coins: p.coins, craftedKits: p.craftedKits, cookedMeals: p.cookedMeals, hunger: Math.round(p.hunger), energy: Math.round(p.energy)
     })),
     objective: { title: 'Prepare the expedition', detail: 'Craft 3 camp kits for the party', progress: room.objective.kits, target: room.objective.target, complete: room.objective.kits >= room.objective.target },
     quest: { id: 'village-cook', title: 'Help the village cook', detail: 'Deliver 5 berries to Mara the Cook', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
@@ -64,6 +64,7 @@ function publicState(room) {
       carpenter: { id: 'carpenter-wood', title: 'Repair the village workshop', progress: room.carpenterQuest.delivered, target: room.carpenterQuest.target, complete: room.carpenterQuest.complete, reward: room.carpenterQuest.reward, unlocked: room.quest.complete }
     },
     village: { workshopRepaired: room.carpenterQuest.complete, mood: room.carpenterQuest.complete ? 'Hopeful' : room.quest.complete ? 'Waiting for repairs' : 'Quiet' },
+    campfire: { built: room.campfire.built, fuel: room.campfire.fuel },
     villagers: villageVillagers(room.clockSeconds, room.carpenterQuest.complete),
     resources: room.resources.map(({ id, kind, x, y, remaining }) => ({ id, kind, x: Math.round(x), y: Math.round(y), remaining }))
   };
@@ -91,7 +92,7 @@ function joinRoom(ws, code, requestedName) {
     id, ws, name: String(requestedName || 'Traveller').trim().slice(0, 18) || 'Traveller',
     x: room.players.size * 28, y: 0, vx: 0, vy: 0, color: room.players.size,
     input: { up: false, down: false, left: false, right: false },
-    wood: 0, berries: 0, coins: 5, craftedKits: 0, hunger: 100, energy: 100, lastGatherAt: 0
+    wood: 0, berries: 0, coins: 5, craftedKits: 0, hunger: 100, energy: 100, cookedMeals: 0, lastGatherAt: 0
   };
   room.players.set(id, player);
   sockets.set(ws, { roomCode: room.code, playerId: id });
@@ -120,7 +121,7 @@ wss.on('connection', ws => {
     if (msg.type === 'create') {
       if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
       const code = roomCode();
-      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 }, quest: { delivered: 0, target: 5, complete: false, reward: 8 }, carpenterQuest: { delivered: 0, target: 3, complete: false, reward: 12 }, clockSeconds: 0 });
+      rooms.set(code, { code, players: new Map(), resources: createResources(), objective: { kits: 0, target: 3 }, quest: { delivered: 0, target: 5, complete: false, reward: 8 }, carpenterQuest: { delivered: 0, target: 3, complete: false, reward: 12 }, campfire: { built: false, fuel: 0 }, clockSeconds: 0 });
       return joinRoom(ws, code, msg.name);
     }
     if (msg.type === 'join') {
@@ -148,7 +149,15 @@ wss.on('connection', ws => {
       } else return send(ws, { type: 'error', message: 'Unknown campfire action.' });
       broadcast(room);
     } else if (msg.type === 'survival') {
-      if (msg.action === 'eat') {
+      if (msg.action === 'cook') {
+        if (!room.campfire.built) return send(ws, { type: 'error', message: 'Build a campfire before cooking a meal.' });
+        if (room.campfire.fuel < 1) return send(ws, { type: 'error', message: 'The campfire needs fuel before you can cook.' });
+        if (player.berries < 2) return send(ws, { type: 'error', message: 'Cooking a meal needs 2 berries.' });
+        player.berries -= 2; player.cookedMeals += 1; room.campfire.fuel -= 1;
+      } else if (msg.action === 'eat-meal') {
+        if (player.cookedMeals < 1) return send(ws, { type: 'error', message: 'You have no cooked meals.' });
+        player.cookedMeals -= 1; player.hunger = Math.min(100, player.hunger + 55);
+      } else if (msg.action === 'eat') {
         if (player.berries < 1) return send(ws, { type: 'error', message: 'You need at least 1 berry to eat. Gather berries first.' });
         player.berries -= 1;
         player.hunger = Math.min(100, player.hunger + 28);
