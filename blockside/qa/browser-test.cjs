@@ -20,6 +20,7 @@ const errors = [];
     if (!report) throw new Error('Browser QA bridge is missing');
     const failures = Object.entries(report.checks).filter(([, ok]) => !ok).map(([name]) => name);
     if (failures.length) throw new Error('World checks failed: ' + failures.join(', ') + ' — ' + JSON.stringify(report.collisions));
+    await page.evaluate(() => { const badge = document.getElementById('qaBadge'); if (badge) badge.style.display = 'none'; });
     await page.screenshot({ path: path.join(out, 'desktop.png'), fullPage: true });
     const pixelCheck = await page.locator('#game').evaluate(canvas => {
       const ctx = canvas.getContext('2d');
