@@ -48,6 +48,7 @@ jobs:
           yes | "$SDKMANAGER" --sdk_root=/usr/lib/android-sdk "platform-tools" "build-tools;34.0.0" "platforms;android-34"
           set -o pipefail
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
+          echo "/usr/lib/jvm/java-17-openjdk-amd64/bin" >> "$GITHUB_PATH"
           echo "ANDROID_HOME=/usr/lib/android-sdk" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
