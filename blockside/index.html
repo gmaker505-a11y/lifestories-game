@@ -60,11 +60,19 @@ function houseSpotIsClear(candidate){
  return true;
 }
 for(let i=0,attempts=0;i<15&&attempts<1800;attempts++){
- const candidate={x:(rand()-.5)*900,y:(rand()-.5)*650,w:52+rand()*25,h:39+rand()*18,c:houseColours[Math.floor(rand()*houseColours.length)]};
- if(houseSpotIsClear(candidate)){houses.push(candidate);i++;}
+  const candidate={x:(rand()-.5)*900,y:(rand()-.5)*650,w:52+rand()*25,h:39+rand()*18,c:houseColours[Math.floor(rand()*houseColours.length)]};
+  if(houseSpotIsClear(candidate)){houses.push(candidate);i++;}
 }
-for(let i=0;i<90;i++)flowers.push({x:(rand()-.5)*1500,y:(rand()-.5)*1100,c:['#e8c66b','#e7d8b8','#c57e9b'][Math.floor(rand()*3)]});
-for(let i=0;i<45;i++)stones.push({x:(rand()-.5)*1400,y:(rand()-.5)*1050,r:4+rand()*7});
+// Resource decorations are kept clear of house walls, roofs and village landmarks.
+function resourceSpotIsClear(x,y,radius=8){
+ const reserved=[{x:112,y:85,w:92,h:80},{x:91,y:34,w:72,h:62},{x:22,y:119,w:66,h:68}];
+ for(const h of houses)if(Math.abs(x-h.x)<h.w/2+radius+7&&Math.abs(y-h.y)<h.h/2+radius+12)return false;
+ for(const r of reserved)if(Math.abs(x-r.x)<r.w/2+radius&&Math.abs(y-r.y)<r.h/2+radius)return false;
+ return true;
+}
+for(const b of berryBushes){let tries=0;while(!resourceSpotIsClear(b.x,b.y,b.r)&&tries++<300){b.x=(rand()-.5)*1200;b.y=(rand()-.5)*850;}}
+for(let i=0;i<90;i++){let p={x:(rand()-.5)*1500,y:(rand()-.5)*1100,c:['#e8c66b','#e7d8b8','#c57e9b'][Math.floor(rand()*3)]};let tries=0;while(!resourceSpotIsClear(p.x,p.y,4)&&tries++<300){p.x=(rand()-.5)*1500;p.y=(rand()-.5)*1100;}flowers.push(p)}
+for(let i=0;i<45;i++){let p={x:(rand()-.5)*1400,y:(rand()-.5)*1050,r:4+rand()*7};let tries=0;while(!resourceSpotIsClear(p.x,p.y,p.r)&&tries++<300){p.x=(rand()-.5)*1400;p.y=(rand()-.5)*1050;}stones.push(p)}
 function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
 function roundRect(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
 function drawTree(x,y,r){const sway=Math.sin(worldTime*.7+x*.04)*.7;ctx.fillStyle='#263b2866';ctx.beginPath();ctx.ellipse(x+5,y+13,r*1.2,r*.68,-.12,0,Math.PI*2);ctx.fill();ctx.fillStyle='#543a28';ctx.fillRect(x-5,y-3,10,23);ctx.fillStyle='#87613b';ctx.fillRect(x-2,y-1,3,18);ctx.fillStyle='#29432b';ctx.beginPath();ctx.arc(x+sway,y-9,r*1.07,0,Math.PI*2);ctx.fill();ctx.fillStyle='#315a35';ctx.beginPath();ctx.arc(x-3+sway,y-11,r*.88,0,Math.PI*2);ctx.fill();ctx.fillStyle='#3e6b3e';ctx.beginPath();ctx.arc(x-r*.34+sway,y-r*.24,r*.68,0,Math.PI*2);ctx.fill();ctx.fillStyle='#527d45';ctx.beginPath();ctx.arc(x+r*.2+sway,y-r*.36,r*.45,0,Math.PI*2);ctx.fill();ctx.fillStyle='#719252';ctx.beginPath();ctx.arc(x-r*.24+sway,y-r*.48,r*.2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#27462d';ctx.beginPath();ctx.arc(x+r*.48+sway,y-r*.02,r*.25,0,Math.PI*2);ctx.fill();ctx.fillStyle='#8eac6370';ctx.beginPath();ctx.ellipse(x-r*.1+sway,y-r*.65,r*.25,r*.12,-.3,0,Math.PI*2);ctx.fill()}
@@ -131,7 +139,9 @@ if(typeof window!=='undefined'){
    const reserved=[{x:112,y:85,w:92,h:80},{x:91,y:34,w:72,h:62},{x:22,y:119,w:66,h:68}];
    const landmarkHits=[];
    for(let i=0;i<houses.length;i++)for(let j=0;j<reserved.length;j++)if(overlaps(houseRects[i],reserved[j],0))landmarkHits.push([i,j]);
-   return {title:'Blockside Browser QA',started,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio||1},canvas:{width:canvas.width,height:canvas.height,visible:!!canvas.getContext('2d')},counts:{houses:houses.length,trees:trees.length,berryBushes:berryBushes.length,stones:stones.length,flowers:flowers.length,villagers:villagers.length},collisions:{housePairs,treeHits,landmarkHits},player:{x:Math.round(player.x),y:Math.round(player.y),wood:player.wood,berries:player.berries,coins:player.coins},onlineConfigured:!document.getElementById('serverUrl').value.includes('YOUR-SERVER-HOST'),checks:{canvasSize:canvas.width>0&&canvas.height>0,housePairs:housePairs.length===0,treeHits:treeHits.length===0,landmarkHits:landmarkHits.length===0}};
+   const resourceHits=[];
+   for(let i=0;i<houses.length;i++){const h=houses[i];for(let j=0;j<berryBushes.length;j++){const b=berryBushes[j];if(Math.abs(b.x-h.x)<h.w/2+b.r+7&&Math.abs(b.y-h.y)<h.h/2+b.r+12)resourceHits.push(['berry',i,j]);}for(let j=0;j<stones.length;j++){const p=stones[j];if(Math.abs(p.x-h.x)<h.w/2+p.r+7&&Math.abs(p.y-h.y)<h.h/2+p.r+12)resourceHits.push(['stone',i,j]);}for(let j=0;j<flowers.length;j++){const p=flowers[j];if(Math.abs(p.x-h.x)<h.w/2+11&&Math.abs(p.y-h.y)<h.h/2+15)resourceHits.push(['flower',i,j]);}}
+   return {title:'Blockside Browser QA',started,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio||1},canvas:{width:canvas.width,height:canvas.height,visible:!!canvas.getContext('2d')},counts:{houses:houses.length,trees:trees.length,berryBushes:berryBushes.length,stones:stones.length,flowers:flowers.length,villagers:villagers.length},collisions:{housePairs,treeHits,landmarkHits,resourceHits},player:{x:Math.round(player.x),y:Math.round(player.y),wood:player.wood,berries:player.berries,coins:player.coins},onlineConfigured:!document.getElementById('serverUrl').value.includes('YOUR-SERVER-HOST'),checks:{canvasSize:canvas.width>0&&canvas.height>0,housePairs:housePairs.length===0,treeHits:treeHits.length===0,landmarkHits:landmarkHits.length===0,resourcesClear:resourceHits.length===0}};
   },
   move(direction,pressed=true){if(!(direction in keys))throw new Error('Unknown direction');keys[direction]=!!pressed;return this.report()},
   screenshot(){return canvas.toDataURL('image/png')}
