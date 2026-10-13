@@ -46,7 +46,7 @@ let saveNotice='New adventure';
 function saveSoloGame(){
  if(netSocket)return;
  try{
-  const data={version:1,player:{x:player.x,y:player.y,dir:player.dir,wood:player.wood,berries:player.berries,coins:player.coins,hunger:player.hunger,energy:player.energy,cookedMeals:player.cookedMeals||0},worldTime,villageQuest,carpenterQuest,villageState,campfireBuilt,fireFuel,trees:trees.map(t=>({id:t.id,wood:t.wood})),berryBushes:berryBushes.map(b=>({id:b.id,berries:b.berries})),savedAt:Date.now()};
+  const data={version:1,player:{x:player.x,y:player.y,dir:player.dir,wood:player.wood,berries:player.berries,coins:player.coins,hunger:player.hunger,energy:player.energy,cookedMeals:player.cookedMeals||0},worldTime,partyObjective,villageQuest,carpenterQuest,villageState,campfireBuilt,fireFuel,trees:trees.map(t=>({id:t.id,wood:t.wood})),berryBushes:berryBushes.map(b=>({id:b.id,berries:b.berries})),savedAt:Date.now()};
   localStorage.setItem(SAVE_KEY,JSON.stringify(data));saveNotice='Progress saved';
  }catch(e){saveNotice='Save unavailable on this browser'}
 }
@@ -56,7 +56,7 @@ function loadSoloGame(){
   const d=JSON.parse(raw);if(d.version!==1||!d.player)return false;
   for(const k of ['x','y','dir','wood','berries','coins','hunger','energy','cookedMeals'])if(Number.isFinite(d.player[k]))player[k]=d.player[k];
   if(Number.isFinite(d.worldTime))worldTime=d.worldTime;
-  if(d.villageQuest)villageQuest={...villageQuest,...d.villageQuest};
+  if(d.partyObjective)partyObjective={...partyObjective,...d.partyObjective};\n  if(d.villageQuest)villageQuest={...villageQuest,...d.villageQuest};
   if(d.carpenterQuest)carpenterQuest={...carpenterQuest,...d.carpenterQuest};
   if(d.villageState)villageState={...villageState,...d.villageState};
   campfireBuilt=!!d.campfireBuilt;fireFuel=Number(d.fireFuel)||0;
