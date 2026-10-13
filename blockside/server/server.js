@@ -8,28 +8,48 @@ const PORT = Number(process.env.PORT || 2567);
 const MAX_PLAYERS = 4;
 const TICK_MS = 50;
 const SPEED = 145;
+const GATHER_RANGE = 90;
+const GATHER_COOLDOWN_MS = 700;
 const rooms = new Map();
 const sockets = new Map();
 
 function roomCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
-  do {
-    code = Array.from({ length: 5 }, () => alphabet[crypto.randomInt(alphabet.length)]).join('');
-  } while (rooms.has(code));
+  do { code = Array.from({ length: 5 }, () => alphabet[crypto.randomInt(alphabet.length)]).join(''); }
+  while (rooms.has(code));
   return code;
 }
 function send(ws, payload) {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
 }
+function createResources() {
+  // Keep the same seeded generation order as the browser so both clients agree on world locations.
+  let seed = 58321;
+  const rand = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const nodes = [];
+  for (let i = 0; i < 100; i++) {
+    const x = (rand() - .5) * 1700, y = (rand() - .5) * 1300;
+    if (Math.abs(x) < 120 && Math.abs(y) < 100) continue;
+    rand(); // tree radius
+    nodes.push({ id: 'tree-' + i, kind: 'wood', x, y, remaining: 3 });
+  }
+  for (let i = 0; i < 34; i++) {
+    const x = (rand() - .5) * 1200, y = (rand() - .5) * 850;
+    rand(); // bush radius
+    const berries = 2 + Math.floor(rand() * 4);
+    nodes.push({ id: 'bush-' + i, kind: 'berries', x, y, remaining: berries });
+  }
+  return nodes;
+}
 function publicState(room) {
   return {
-    type: 'state',
-    roomCode: room.code,
+    type: 'state', roomCode: room.code,
     players: [...room.players.values()].map(p => ({
       id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
       name: p.name, wood: p.wood, berries: p.berries
-    }))
+    })),
+    resources: room.resources.map(({ id, kind, x, y, remaining }) => ({ id, kind, x: Math.round(x), y: Math.round(y), remaining }))
   };
 }
 function broadcast(room) {
@@ -53,9 +73,9 @@ function joinRoom(ws, code, requestedName) {
   const id = crypto.randomUUID();
   const player = {
     id, ws, name: String(requestedName || 'Traveller').trim().slice(0, 18) || 'Traveller',
-    x: 0 + (room.players.size * 28), y: 0, vx: 0, vy: 0, color: room.players.size,
+    x: room.players.size * 28, y: 0, vx: 0, vy: 0, color: room.players.size,
     input: { up: false, down: false, left: false, right: false },
-    wood: 0, berries: 0
+    wood: 0, berries: 0, lastGatherAt: 0
   };
   room.players.set(id, player);
   sockets.set(ws, { roomCode: room.code, playerId: id });
@@ -73,8 +93,7 @@ const server = http.createServer((req, res) => {
 });
 const wss = new WebSocket.Server({ server, maxPayload: 2048 });
 wss.on('connection', ws => {
-  let messageCount = 0;
-  let windowStart = Date.now();
+  let messageCount = 0, windowStart = Date.now();
   ws.on('message', raw => {
     const now = Date.now();
     if (now - windowStart > 1000) { windowStart = now; messageCount = 0; }
@@ -85,38 +104,44 @@ wss.on('connection', ws => {
     if (msg.type === 'create') {
       if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
       const code = roomCode();
-      const room = { code, players: new Map() };
-      rooms.set(code, room);
-      joinRoom(ws, code, msg.name);
-      return;
+      rooms.set(code, { code, players: new Map(), resources: createResources() });
+      return joinRoom(ws, code, msg.name);
     }
     if (msg.type === 'join') {
       if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
-      if (typeof msg.code !== 'string' || !/^[A-HJ-NP-Z2-9]{5}$/i.test(msg.code)) {
+      if (typeof msg.code !== 'string' || !/^[A-HJ-NP-Z2-9]{5}$/i.test(msg.code))
         return send(ws, { type: 'error', message: 'Enter a valid five-character room code.' });
-      }
       return joinRoom(ws, msg.code, msg.name);
     }
     const session = sockets.get(ws);
     if (!session) return send(ws, { type: 'error', message: 'Create or join a room first.' });
-    const room = rooms.get(session.roomCode);
-    const player = room && room.players.get(session.playerId);
+    const room = rooms.get(session.roomCode), player = room && room.players.get(session.playerId);
     if (!player) return;
     if (msg.type === 'input') {
       const i = msg.input || {};
       for (const key of ['up', 'down', 'left', 'right']) player.input[key] = i[key] === true;
-    }
-    if (msg.type === 'gather') {
-      const kind = msg.kind;
-      if (kind === 'wood') player.wood = Math.min(999, player.wood + 1);
-      if (kind === 'berries') player.berries = Math.min(999, player.berries + 1);
+    } else if (msg.type === 'gather') {
+      if (now - player.lastGatherAt < GATHER_COOLDOWN_MS)
+        return send(ws, { type: 'error', message: 'Give it a moment before gathering again.' });
+      if (msg.kind !== 'wood' && msg.kind !== 'berries')
+        return send(ws, { type: 'error', message: 'Unknown resource.' });
+      const node = room.resources
+        .filter(r => r.kind === msg.kind && r.remaining > 0)
+        .map(r => ({ resource: r, distance: Math.hypot(r.x - player.x, r.y - player.y) }))
+        .sort((a, b) => a.distance - b.distance)[0];
+      if (!node || node.distance > GATHER_RANGE)
+        return send(ws, { type: 'error', message: 'Move closer to a living resource before gathering.' });
+      node.resource.remaining--;
+      if (msg.kind === 'wood') player.wood = Math.min(999, player.wood + 1);
+      else player.berries = Math.min(999, player.berries + 1);
+      player.lastGatherAt = now;
       broadcast(room);
     }
   });
   ws.on('close', () => removePlayer(ws));
   ws.on('error', () => removePlayer(ws));
 });
-setInterval(() => {
+const tick = setInterval(() => {
   for (const room of rooms.values()) {
     for (const p of room.players.values()) {
       let dx = Number(p.input.right) - Number(p.input.left);
@@ -128,4 +153,5 @@ setInterval(() => {
     broadcast(room);
   }
 }, TICK_MS);
+server.on('close', () => clearInterval(tick));
 server.listen(PORT, '0.0.0.0', () => console.log('Blockside Realm Server listening on ' + PORT));
