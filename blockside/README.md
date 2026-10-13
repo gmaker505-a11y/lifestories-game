@@ -17,6 +17,7 @@ The browser client includes **Create Room** and **Join Friend** flows. The Node.
 - Seeded shared wood and berry resource locations.
 - Server-validated gathering: a player must be within 90 world units, the resource must have stock, and gathering has a cooldown.
 - Server-authoritative camp-kit crafting (3 wood + 2 berries per kit) and a shared party objective to prepare 3 kits.
+- A complete rendered world with a day/night cycle, warm late-day light, and dusk/night ambience; online clients share the server's world clock.
 - Living village NPCs: Mara the Cook and Bram the Carpenter follow scheduled routines, with their current activities and positions synchronized to online players. Completing Bram's quest visibly repairs the workshop, changes the village mood to hopeful, and gives Bram a new workshop routine.
 - A two-step village quest chain: deliver 5 berries to Mara for 8 coins, then deliver 3 wood to Bram to repair the workshop for 12 coins. The server validates NPC proximity, supplies, quest order, and one-time completion in online rooms.
 - A health endpoint at `/` and `/health`.
