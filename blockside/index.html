@@ -48,7 +48,21 @@ const trees=[],berryBushes=[],houses=[],stones=[],flowers=[];
 let seed=58321;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
 for(let i=0;i<100;i++){const x=(rand()-.5)*1700,y=(rand()-.5)*1300;if(Math.abs(x)<120&&Math.abs(y)<100)continue;trees.push({id:i,x,y,r:17+rand()*12,wood:3});}
 for(let i=0;i<34;i++){berryBushes.push({id:i,x:(rand()-.5)*1200,y:(rand()-.5)*850,r:10+rand()*5,berries:2+Math.floor(rand()*4)});}
-for(let i=0;i<15;i++){houses.push({x:(rand()-.5)*520,y:(rand()-.5)*350,w:52+rand()*25,h:39+rand()*18,c:['#a65e43','#b78050','#79634e','#985b50'][Math.floor(rand()*4)]});}
+// Place houses deliberately: never overlap another house, a tree, or the village's fixed landmarks.
+const houseColours=['#a65e43','#b78050','#79634e','#985b50'];
+function houseSpotIsClear(candidate){
+ const hw=candidate.w/2+18,hh=candidate.h/2+20;
+ // Keep the central workshop, signpost and campfire clear.
+ const reserved=[{x:112,y:85,w:92,h:80},{x:91,y:34,w:72,h:62},{x:22,y:119,w:66,h:68}];
+ for(const r of reserved){if(Math.abs(candidate.x-r.x)<hw+r.w/2&&Math.abs(candidate.y-r.y)<hh+r.h/2)return false;}
+ for(const h of houses){if(Math.abs(candidate.x-h.x)<hw+h.w/2+12&&Math.abs(candidate.y-h.y)<hh+h.h/2+12)return false;}
+ for(const t of trees){if(Math.hypot(candidate.x-t.x,candidate.y-t.y)<Math.max(t.r+38,54))return false;}
+ return true;
+}
+for(let i=0,attempts=0;i<15&&attempts<1800;attempts++){
+ const candidate={x:(rand()-.5)*900,y:(rand()-.5)*650,w:52+rand()*25,h:39+rand()*18,c:houseColours[Math.floor(rand()*houseColours.length)]};
+ if(houseSpotIsClear(candidate)){houses.push(candidate);i++;}
+}
 for(let i=0;i<90;i++)flowers.push({x:(rand()-.5)*1500,y:(rand()-.5)*1100,c:['#e8c66b','#e7d8b8','#c57e9b'][Math.floor(rand()*3)]});
 for(let i=0;i<45;i++)stones.push({x:(rand()-.5)*1400,y:(rand()-.5)*1050,r:4+rand()*7});
 function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=Math.floor(W*dpr);canvas.height=Math.floor(H*dpr);canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
