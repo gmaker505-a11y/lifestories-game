@@ -43,3 +43,15 @@ The server listens on port `2567` by default. Set `PORT` if your host assigns a 
 3. Make gathering and world interactions server-validated; add reconnection handling.
 4. Add crafting, quests, persistent saves, and better mobile feedback.
 5. Package for Android and iOS after browser multiplayer is stable.
+
+
+## Deploying the online server
+
+A Render deployment blueprint is included at the repository root (`render.yaml`) with a Dockerfile in `blockside/server/`. To deploy it, open the repository's Render blueprint/import flow, connect this GitHub repository, and apply the blueprint. Hosting providers may require account setup and may sleep on free plans.
+
+After the service is deployed:
+1. Open the server's HTTPS base URL and check that it returns JSON with `"status":"ok"`.
+2. In the game, open **Create / Join Online Room** and replace the example address with the secure WebSocket URL for that same service (`wss://...`).
+3. Test room creation and joining from multiple devices. Do not share private credentials in the repository.
+
+I cannot deploy the public service without authorization to a hosting account. The blueprint prepares the repository for deployment; it does not mean a live server already exists.
