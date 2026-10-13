@@ -1,0 +1,66 @@
+name: Blockside Browser Visual QA
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'blockside/**'
+      - '.github/workflows/blockside-browser-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: blockside-browser-qa
+  cancel-in-progress: true
+jobs:
+  browser-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: blockside/qa/package.json
+      - name: Install browser QA dependencies
+        working-directory: blockside/qa
+        run: npm install
+      - name: Install Chromium
+        working-directory: blockside/qa
+        run: npx playwright install --with-deps chromium
+      - name: Serve the game
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/blockside-http.log 2>&1 &
+          echo $! > /tmp/blockside-http.pid
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/blockside/ >/dev/null && exit 0; sleep 1; done
+          cat /tmp/blockside-http.log
+          exit 1
+      - name: Run desktop, mobile, movement and world-collision checks
+        working-directory: blockside/qa
+        run: npm test
+      - name: Upload screenshots and QA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockside-browser-qa
+          path: blockside/qa/results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Publish latest screenshots for direct inspection
+        if: success()
+        run: |
+          mkdir -p blockside/qa/latest
+          cp blockside/qa/results/desktop.png blockside/qa/latest/desktop.png
+          cp blockside/qa/results/mobile.png blockside/qa/latest/mobile.png
+          cp blockside/qa/results/report.json blockside/qa/latest/report.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add blockside/qa/latest/
+          if git diff --cached --quiet; then echo "QA screenshots are unchanged"; exit 0; fi
+          git commit -m "Update automated Blockside visual QA screenshots [skip ci]"
+          git push
