@@ -1,0 +1,54 @@
+name: Build Living World iOS project
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  GODOT_VERSION: "4.3"
+
+jobs:
+  export-ios:
+    runs-on: macos-14
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Download Godot and export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/godot" "$HOME/Library/Application Support/Godot/export_templates"
+          curl -fL "https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable/Godot_v$GODOT_VERSION-stable_macos.universal.zip" -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          GODOT_APP="$(find "$RUNNER_TEMP/godot" -maxdepth 3 -name 'Godot.app' -print -quit)"
+          test -n "$GODOT_APP"
+          echo "GODOT_BIN=$GODOT_APP/Contents/MacOS/Godot" >> "$GITHUB_ENV"
+          curl -fL "https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable/Godot_v$GODOT_VERSION-stable_export_templates.tpz" -o "$RUNNER_TEMP/templates.tpz"
+          mkdir -p "$RUNNER_TEMP/templates"
+          unzip -q "$RUNNER_TEMP/templates.tpz" -d "$RUNNER_TEMP/templates"
+          mkdir -p "$HOME/Library/Application Support/Godot/export_templates/$GODOT_VERSION.stable"
+          cp -R "$RUNNER_TEMP/templates/templates/." "$HOME/Library/Application Support/Godot/export_templates/$GODOT_VERSION.stable/"
+
+      - name: Import and validate project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          "$GODOT_BIN" --headless --editor --path . --import
+          "$GODOT_BIN" --headless --path . --quit-after 3
+
+      - name: Export iOS Xcode project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p build/ios
+          "$GODOT_BIN" --headless --verbose --path . --export-debug "iOS" build/ios/LivingWorld.zip
+          test -s build/ios/LivingWorld.zip
+
+      - name: Upload iOS export
+        uses: actions/upload-artifact@v4
+        with:
+          name: living-world-ios-xcode-project
+          path: build/ios/LivingWorld.zip
+          if-no-files-found: error
