@@ -116,6 +116,29 @@ document.getElementById('meal').onclick=()=>{const action=player.cookedMeals>0?'
 document.getElementById('rest').onclick=()=>{if(netSocket&&netSocket.readyState===WebSocket.OPEN){netSocket.send(JSON.stringify({type:'survival',action:'rest'}));hintEl.textContent='You take a breather and recover energy…';return}player.energy=Math.min(100,player.energy+22);player.hunger=Math.max(0,player.hunger-2);showSurvival();hintEl.textContent='You rested. Energy restored; a little food would help too.'};
 document.getElementById('talk').onclick=()=>{const questId=!villageQuest.complete?'village-cook':'carpenter-wood';const npc=villagers.find(v=>v.id===(questId==='village-cook'?'cook':'carpenter'));if(netSocket&&netSocket.readyState===WebSocket.OPEN){netSocket.send(JSON.stringify({type:'quest',questId}));hintEl.textContent='Speaking to '+npc.name+'…';return}localQuest(questId)};
 
+
+/* Browser QA bridge: read-only diagnostics for automated visual and collision tests. */
+if(typeof window!=='undefined'){
+ window.__BLOCKSIDE_QA__={
+  start(){if(!started){started=true;document.getElementById('intro').classList.add('hidden')}return this.report()},
+  report(){
+   const overlaps=(a,b,pad=0)=>Math.abs(a.x-b.x)<(a.w+b.w)/2+pad&&Math.abs(a.y-b.y)<(a.h+b.h)/2+pad;
+   const houseRects=houses.map((h,i)=>({id:i,x:h.x,y:h.y,w:h.w+8,h:h.h+12}));
+   const housePairs=[];
+   for(let i=0;i<houseRects.length;i++)for(let j=i+1;j<houseRects.length;j++)if(overlaps(houseRects[i],houseRects[j],5))housePairs.push([i,j]);
+   const treeHits=[];
+   for(let i=0;i<houses.length;i++)for(let j=0;j<trees.length;j++){const h=houses[i],t=trees[j];if(Math.hypot(h.x-t.x,h.y-t.y)<Math.max(t.r+38,54)+Math.max(h.w,h.h)*.35)treeHits.push([i,j])}
+   const reserved=[{x:112,y:85,w:92,h:80},{x:91,y:34,w:72,h:62},{x:22,y:119,w:66,h:68}];
+   const landmarkHits=[];
+   for(let i=0;i<houses.length;i++)for(let j=0;j<reserved.length;j++)if(overlaps(houseRects[i],reserved[j],0))landmarkHits.push([i,j]);
+   return {title:'Blockside Browser QA',started,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio||1},canvas:{width:canvas.width,height:canvas.height,visible:!!canvas.getContext('2d')},counts:{houses:houses.length,trees:trees.length,berryBushes:berryBushes.length,stones:stones.length,flowers:flowers.length,villagers:villagers.length},collisions:{housePairs,treeHits,landmarkHits},player:{x:Math.round(player.x),y:Math.round(player.y),wood:player.wood,berries:player.berries,coins:player.coins},onlineConfigured:!document.getElementById('serverUrl').value.includes('YOUR-SERVER-HOST'),checks:{canvasSize:canvas.width>0&&canvas.height>0,housePairs:housePairs.length===0,treeHits:treeHits.length===0,landmarkHits:landmarkHits.length===0}};
+  },
+  move(direction,pressed=true){if(!(direction in keys))throw new Error('Unknown direction');keys[direction]=!!pressed;return this.report()},
+  screenshot(){return canvas.toDataURL('image/png')}
+ };
+ if(new URLSearchParams(location.search).has('qa')){const badge=document.createElement('pre');badge.id='qaBadge';badge.style.cssText='position:fixed;z-index:9999;right:8px;top:92px;max-width:min(340px,70vw);max-height:45vh;overflow:auto;background:#101a14ee;color:#e9efdc;border:1px solid #e6bd69;border-radius:10px;padding:10px;font:11px/1.4 monospace;pointer-events:auto';badge.textContent='QA checks running…';document.body.appendChild(badge);const refresh=()=>{const r=window.__BLOCKSIDE_QA__.report();badge.textContent='BLOCKSIDE QA · '+(Object.values(r.checks).every(Boolean)?'PASS':'CHECK')+'\\n'+JSON.stringify(r,null,2)};document.getElementById('start').addEventListener('click',()=>setTimeout(refresh,50));setInterval(refresh,1500)}
+}
+
 })();
 </script>
 </body>
