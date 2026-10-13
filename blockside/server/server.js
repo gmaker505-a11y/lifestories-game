@@ -42,10 +42,12 @@ function createResources() {
   }
   return nodes;
 }
-function villageVillagers(seconds) {
+function villageVillagers(seconds, workshopRepaired = false) {
   const phase = seconds % 180;
   const cook = phase < 60 ? { x: 55, y: 48, activity: 'Serving breakfast' } : phase < 120 ? { x: 155, y: 130, activity: 'Picking herbs' } : { x: 20, y: 90, activity: 'Resting by the well' };
-  const carpenter = phase < 80 ? { x: 110, y: 50, activity: 'Working at the bench' } : phase < 140 ? { x: 150, y: -40, activity: 'Checking the timber' } : { x: 85, y: 25, activity: 'Closing the workshop' };
+  const carpenter = workshopRepaired
+    ? (phase < 80 ? { x: 118, y: 88, activity: 'Building village tools' } : phase < 140 ? { x: 150, y: -40, activity: 'Delivering finished timber' } : { x: 85, y: 25, activity: 'Closing the workshop' })
+    : (phase < 80 ? { x: 110, y: 50, activity: 'Working at the bench' } : phase < 140 ? { x: 150, y: -40, activity: 'Checking the timber' } : { x: 85, y: 25, activity: 'Closing the workshop' });
   return [{ id: 'cook', name: 'Mara the Cook', role: 'Cook', ...cook }, { id: 'carpenter', name: 'Bram the Carpenter', role: 'Carpenter', ...carpenter }];
 }
 function publicState(room) {
@@ -61,7 +63,8 @@ function publicState(room) {
       cook: { id: 'village-cook', title: 'Help the village cook', progress: room.quest.delivered, target: room.quest.target, complete: room.quest.complete, reward: room.quest.reward },
       carpenter: { id: 'carpenter-wood', title: 'Repair the village workshop', progress: room.carpenterQuest.delivered, target: room.carpenterQuest.target, complete: room.carpenterQuest.complete, reward: room.carpenterQuest.reward, unlocked: room.quest.complete }
     },
-    villagers: villageVillagers(room.clockSeconds),
+    village: { workshopRepaired: room.carpenterQuest.complete, mood: room.carpenterQuest.complete ? 'Hopeful' : room.quest.complete ? 'Waiting for repairs' : 'Quiet' },
+    villagers: villageVillagers(room.clockSeconds, room.carpenterQuest.complete),
     resources: room.resources.map(({ id, kind, x, y, remaining }) => ({ id, kind, x: Math.round(x), y: Math.round(y), remaining }))
   };
 }
@@ -143,7 +146,7 @@ wss.on('connection', ws => {
       room.objective.kits++;
       broadcast(room);
     } else if (msg.type === 'quest') {
-      const villagers = villageVillagers(room.clockSeconds);
+      const villagers = villageVillagers(room.clockSeconds, room.carpenterQuest.complete);
       if (msg.questId === 'village-cook') {
         const cook = villagers.find(v => v.id === 'cook');
         if (Math.hypot(player.x - cook.x, player.y - cook.y) > 95)
