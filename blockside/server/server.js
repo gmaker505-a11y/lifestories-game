@@ -1,0 +1,131 @@
+'use strict';
+
+const http = require('node:http');
+const crypto = require('node:crypto');
+const WebSocket = require('ws');
+
+const PORT = Number(process.env.PORT || 2567);
+const MAX_PLAYERS = 4;
+const TICK_MS = 50;
+const SPEED = 145;
+const rooms = new Map();
+const sockets = new Map();
+
+function roomCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code;
+  do {
+    code = Array.from({ length: 5 }, () => alphabet[crypto.randomInt(alphabet.length)]).join('');
+  } while (rooms.has(code));
+  return code;
+}
+function send(ws, payload) {
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+}
+function publicState(room) {
+  return {
+    type: 'state',
+    roomCode: room.code,
+    players: [...room.players.values()].map(p => ({
+      id: p.id, x: Math.round(p.x), y: Math.round(p.y), color: p.color,
+      name: p.name, wood: p.wood, berries: p.berries
+    }))
+  };
+}
+function broadcast(room) {
+  const state = publicState(room);
+  for (const player of room.players.values()) send(player.ws, state);
+}
+function removePlayer(ws) {
+  const session = sockets.get(ws);
+  if (!session) return;
+  sockets.delete(ws);
+  const room = rooms.get(session.roomCode);
+  if (!room) return;
+  room.players.delete(session.playerId);
+  if (room.players.size === 0) rooms.delete(room.code);
+  else broadcast(room);
+}
+function joinRoom(ws, code, requestedName) {
+  const room = rooms.get(String(code || '').toUpperCase());
+  if (!room) return send(ws, { type: 'error', message: 'Room not found. Check the code or create a new room.' });
+  if (room.players.size >= MAX_PLAYERS) return send(ws, { type: 'error', message: 'This room is full (4/4 players).' });
+  const id = crypto.randomUUID();
+  const player = {
+    id, ws, name: String(requestedName || 'Traveller').trim().slice(0, 18) || 'Traveller',
+    x: 0 + (room.players.size * 28), y: 0, vx: 0, vy: 0, color: room.players.size,
+    input: { up: false, down: false, left: false, right: false },
+    wood: 0, berries: 0
+  };
+  room.players.set(id, player);
+  sockets.set(ws, { roomCode: room.code, playerId: id });
+  send(ws, { type: 'joined', playerId: id, roomCode: room.code, capacity: MAX_PLAYERS });
+  broadcast(room);
+}
+const server = http.createServer((req, res) => {
+  if (req.url === '/health' || req.url === '/') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ name: 'Blockside Realm Server', status: 'ok', maxPlayersPerRoom: MAX_PLAYERS, rooms: rooms.size }));
+    return;
+  }
+  res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+  res.end('Not found');
+});
+const wss = new WebSocket.Server({ server, maxPayload: 2048 });
+wss.on('connection', ws => {
+  let messageCount = 0;
+  let windowStart = Date.now();
+  ws.on('message', raw => {
+    const now = Date.now();
+    if (now - windowStart > 1000) { windowStart = now; messageCount = 0; }
+    if (++messageCount > 45) return send(ws, { type: 'error', message: 'Too many messages; slow down.' });
+    let msg;
+    try { msg = JSON.parse(raw.toString()); } catch { return send(ws, { type: 'error', message: 'Invalid message format.' }); }
+    if (!msg || typeof msg.type !== 'string') return;
+    if (msg.type === 'create') {
+      if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
+      const code = roomCode();
+      const room = { code, players: new Map() };
+      rooms.set(code, room);
+      joinRoom(ws, code, msg.name);
+      return;
+    }
+    if (msg.type === 'join') {
+      if (sockets.has(ws)) return send(ws, { type: 'error', message: 'You are already in a room.' });
+      if (typeof msg.code !== 'string' || !/^[A-HJ-NP-Z2-9]{5}$/i.test(msg.code)) {
+        return send(ws, { type: 'error', message: 'Enter a valid five-character room code.' });
+      }
+      return joinRoom(ws, msg.code, msg.name);
+    }
+    const session = sockets.get(ws);
+    if (!session) return send(ws, { type: 'error', message: 'Create or join a room first.' });
+    const room = rooms.get(session.roomCode);
+    const player = room && room.players.get(session.playerId);
+    if (!player) return;
+    if (msg.type === 'input') {
+      const i = msg.input || {};
+      for (const key of ['up', 'down', 'left', 'right']) player.input[key] = i[key] === true;
+    }
+    if (msg.type === 'gather') {
+      const kind = msg.kind;
+      if (kind === 'wood') player.wood = Math.min(999, player.wood + 1);
+      if (kind === 'berries') player.berries = Math.min(999, player.berries + 1);
+      broadcast(room);
+    }
+  });
+  ws.on('close', () => removePlayer(ws));
+  ws.on('error', () => removePlayer(ws));
+});
+setInterval(() => {
+  for (const room of rooms.values()) {
+    for (const p of room.players.values()) {
+      let dx = Number(p.input.right) - Number(p.input.left);
+      let dy = Number(p.input.down) - Number(p.input.up);
+      if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+      p.x = Math.max(-3000, Math.min(3000, p.x + dx * SPEED * TICK_MS / 1000));
+      p.y = Math.max(-3000, Math.min(3000, p.y + dy * SPEED * TICK_MS / 1000));
+    }
+    broadcast(room);
+  }
+}, TICK_MS);
+server.listen(PORT, '0.0.0.0', () => console.log('Blockside Realm Server listening on ' + PORT));
