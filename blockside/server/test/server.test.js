@@ -64,6 +64,8 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   assert.deepEqual(firstState.quests.carpenter, { id: 'carpenter-wood', title: 'Repair the village workshop', progress: 0, target: 3, complete: false, reward: 12, unlocked: false });
   assert.equal(firstState.village.workshopRepaired, false);
   assert.equal(firstState.village.mood, 'Quiet');
+  assert.deepEqual(firstState.campfire, { built: false, fuel: 0 });
+  assert.equal(firstState.players[0].cookedMeals, 0);
   assert.equal(typeof firstState.clockSeconds, 'number');
   assert.equal(firstState.villagers.length, 2);
   assert.ok(firstState.villagers.some(v => v.name === 'Mara the Cook'));
@@ -74,6 +76,13 @@ test('room creation, join capacity, server movement, and resource snapshots', as
   const questSupplyError = nextMessage(host, m => m.type === 'error' && /needs 5 berries/i.test(m.message));
   send(host, { type: 'quest', questId: 'village-cook' });
   assert.match((await questSupplyError).message, /needs 5 berries/i);
+  const noFireCookError = nextMessage(host, m => m.type === 'error' && /Build a campfire/i.test(m.message));
+  send(host, { type: 'survival', action: 'cook' });
+  assert.match((await noFireCookError).message, /campfire/i);
+  const noMealError = nextMessage(host, m => m.type === 'error' && /no cooked meals/i.test(m.message));
+  send(host, { type: 'survival', action: 'eat-meal' });
+  assert.match((await noMealError).message, /no cooked meals/i);
+
   const recipeError = nextMessage(host, m => m.type === 'error' && /3 wood and 2 berries/i.test(m.message));
   send(host, { type: 'craft', recipe: 'camp-kit' });
   assert.match((await recipeError).message, /3 wood and 2 berries/i);
