@@ -4,6 +4,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const WebSocket = require('ws');
 
 const PORT = 25681;
@@ -80,4 +82,12 @@ test('room creation, join capacity, and server-ticked movement', async t => {
   send(host, { type: 'input', input: { right: true } });
   const moved = await movedPromise;
   assert.ok(moved.players.find(p => p.name === 'Host').x > 0);
+});
+
+test('browser game JavaScript parses without syntax errors', () => {
+  const htmlPath = path.join(__dirname, '..', '..', 'index.html');
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  const match = html.match(/<script>([\\s\\S]*?)<\\/script>/i);
+  assert.ok(match, 'Expected the game HTML to contain an inline script');
+  assert.doesNotThrow(() => new vm.Script(match[1], { filename: 'blockside/index.html' }));
 });
