@@ -1,0 +1,42 @@
+name: Wildbound Prototype Checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wildbound/**'
+      - '.github/workflows/wildbound-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate HTML JavaScript
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs'),vm=require('node:vm');
+          const html=fs.readFileSync('wildbound/index.html','utf8');
+          const js=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
+          if(js.length!==1)throw Error('Expected one game script');
+          new vm.Script(js[0]);
+          for(const id of ['game','startBtn','gatherBtn','craftBtn','joystick'])if(!html.includes('id="'+id+'"'))throw Error('Missing UI element '+id);
+          console.log('Wildbound HTML script syntax and core UI checks passed');
+          NODE
+  multiplayer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wildbound/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run check
+      - run: npm test
